@@ -3,11 +3,11 @@
 ```sh
 # Linux:
 cd ~/.nuke
-git clone --recursive https://github.com/vinavfx/vina_gizmos.git
+git clone https://github.com/vinavfx/vina_gizmos.git
 
 # Windows
 # Download git: https://git-scm.com/download/win
-git clone --recursive https://github.com/vinavfx/vina_gizmos.git "C:\Users\<username>\.nuke\vina_gizmos"
+git clone https://github.com/vinavfx/vina_gizmos.git "C:\Users\<username>\.nuke\vina_gizmos"
 ````
 
 2 - Copy this lines to <b>menu.py</b>

@@ -1,0 +1,2685 @@
+set cut_paste_input [stack 0]
+version 13.2 v5
+push $cut_paste_input
+Group {
+ name vSplineBranch
+ onCreate "def exe(func):\n    allowed_knobs = \['Boolean_Knob', 'PyScript_Knob']\n    exclude_knobs = \['selected']\n\n    knob = nuke.thisKnob()\n    allowed_knob = knob.Class() in allowed_knobs and not knob.name() in exclude_knobs\n\n    dev = False\n    try:\n        dev = vina.dev\n    except:\n        pass\n\n    if dev and allowed_knob:\n        vina.vina_setup.reload_vina_modules()\n\n    try:\n        eval(func + '()')\n    except Exception as e:\n        if dev:\n            import traceback\n            print(traceback.format_exc())\n\n        if not allowed_knob:\n            return\n\n        if not 'vina' in str(e):\n            return\n\n        message = 'ask <b>Francisco Contreras</b> for the script <b>\"\{\}\"</b>, since the script for this method is not embedded in the node. Thank you.'.format(\n            func)\n        nuke.message(message)\n"
+ knobChanged "def limit_range(sufix):\n    this = nuke.thisNode()\n    knob = nuke.thisKnob()\n    name = knob.name()\n\n    min_knob = 'min_' + sufix\n    max_knob = 'max_' + sufix\n\n\n    if name == min_knob:\n        max = this.knob(max_knob)\n        if knob.value() > max.value():\n            max.setValue(knob.value())\n    \n    if name == max_knob:\n        min = this.knob(min_knob)\n        if knob.value() < min.value():\n            min.setValue(knob.value())\n\ndef changed():\n    limit_range('branch_width')\n    limit_range('sub_branch_width')\n    limit_range('branch_angle')\n    limit_range('branch_length')\n    limit_range('sub_branch_angle')\n    limit_range('sub_branch_length')\n    limit_range('wave')\n    limit_range('wavy')\n            \n\nchanged()"
+ tile_color 0x71c570ff
+ note_font "Bitstream Vera Sans"
+ selected true
+ xpos -218
+ ypos -63
+ addUserKnob {20 controls l Controls}
+ addUserKnob {3 branches l Branches}
+ branches 10
+ addUserKnob {3 sub_branches l "Sub Branches" -STARTLINE}
+ sub_branches 10
+ addUserKnob {26 ""}
+ addUserKnob {7 min_branch_width l "Branch Width" R 1 10}
+ min_branch_width 2
+ addUserKnob {7 max_branch_width l "" -STARTLINE R 1 10}
+ max_branch_width 2
+ addUserKnob {7 min_sub_branch_width l "SubBranch Width" R 1 10}
+ min_sub_branch_width 1
+ addUserKnob {7 max_sub_branch_width l "" -STARTLINE R 1 10}
+ max_sub_branch_width 1
+ addUserKnob {26 ""}
+ addUserKnob {4 branches_divitions l "Branches Divitions" M {Random "4 Divitions" "5 Divitions" "6 Divitions" "7 Divitions" "8 Divitions" ""}}
+ addUserKnob {22 create_branches l "Create Branches" T "# Author: Francisco Jose Contreras Cuevas\n# Office: VFX Artist - Senior Compositor\n# Website: vinavfx.com\nimport nuke\nimport nuke.rotopaint as rp\nimport math\nimport random\n\n\ndef create_branches():\n    root_branch = get_root_branch()\n    this = nuke.thisNode()\n\n    if not root_branch:\n        return\n\n    root_layers().removeAll()\n\n    branches = int(this.knob('branches').value())\n    sub_branches = int(this.knob('sub_branches').value())\n    seed = int(this.knob('seed').value())\n\n    root_branches = get_root_branches()\n\n    total = (branches + sub_branches) * len(root_branches)\n    section = 100.0 / total\n    percent = 0\n\n    for root_branch in root_branches:\n\n        progress = nuke.ProgressTask('Creating Branches')\n\n        for i in range(branches):\n            progress.setMessage('Creating branch: \{0\} ...'.format(i))\n            progress.setProgress(int(percent))\n            percent += section\n\n            if progress.isCancelled():\n                break\n\n            name = 'main_branch_\{0\}_root_\{1\}'.format(i, root_branch.name)\n            add_spline(name, seed + i + 100)\n\n        for i in range(sub_branches):\n            progress.setMessage('Creating branch: \{0\} ...'.format(i))\n            progress.setProgress(int(percent))\n            percent += section\n\n            if progress.isCancelled():\n                break\n\n            name = 'sub_branch_\{0\}_root_\{1\}'.format(i, root_branch.name)\n            add_spline(name, seed + i + 200, True)\n\n    del progress\n\n    refresh()\n\n\ndef add_spline(name, seed, sub_branch=False):\n    this = nuke.thisNode()\n\n    samples = nuke.toNode('spline_samples')\n    curves = samples\['curves']\n\n    div = this.knob('branches_divitions').value().replace(' Divitions', '')\n    if div == 'Random':\n        divs = \[4, 5, 6, 7]\n        random.seed(seed)\n        div = random.choice(divs)\n\n    if sub_branch:\n        min_width = int(this.knob('min_sub_branch_width').value())\n        max_width = int(this.knob('max_sub_branch_width').value())\n    else:\n        min_width = int(this.knob('min_branch_width').value())\n        max_width = int(this.knob('max_branch_width').value())\n\n    if min_width >= max_width:\n        width = min_width\n    else:\n        widths = \['05', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']\n        widths = widths\[min_width - 1:max_width]\n        random.seed(seed + 10)\n        width = random.choice(widths)\n\n    layer = curves.toElement('div_\{0\}_width_\{1\}'.format(div, width))\n\n    spline = layer.clone()\n    if name:\n        spline.name = name\n\n    root_layers().append(spline)\n\n    spline.locked = False\n\n    attr = spline.getAttributes()\n\n    if sub_branch:\n        attr.set('r', 0)\n        attr.set('g', 1)\n        attr.set('b', 0)\n    else:\n        attr.set('r', 1)\n        attr.set('g', 0)\n        attr.set('b', 0)\n\n    return spline\n\n\ndef get_branches(sub_branch=False):\n    branches = \{\}\n\n    roto = nuke.thisNode().input(0)\n\n    if not roto:\n        return \{\}\n    if not roto.Class() == 'Roto':\n        return \{\}\n\n    curves = roto\['curves']\n\n    prefix = 'sub_branch' if sub_branch else 'main_branch'\n\n    for l in root_layers():\n        if prefix in l.name:\n\n            root_name = l.name.split('root_')\[-1]\n\n            if not root_name in branches:\n                branches\[root_name] = \{\n                    'root': curves.toElement(root_name),\n                    'branches': \[]\n                \}\n\n            branches\[root_name]\['branches'].append(l)\n\n    return branches\n\n\ndef get_root_branch():\n\n    roto = nuke.thisNode().input(0)\n\n    if not roto:\n        nuke.message(\"Must connect a 'Roto' node !\")\n        return\n\n    if not roto.Class() == 'Roto':\n        nuke.message(\"Must connect a 'Roto' node !\")\n        return\n\n    root_layer = roto\['curves'].rootLayer\n\n    return root_layer\[0]\n\n\ndef get_root_branches():\n\n    roto = nuke.thisNode().input(0)\n\n    if not roto:\n        nuke.message(\"Must connect a 'Roto' node !\")\n        return \[]\n\n    if not roto.Class() == 'Roto':\n        nuke.message(\"Must connect a 'Roto' node !\")\n        return \[]\n\n    root_layer = roto\['curves'].rootLayer\n\n    return root_layer\n\n\nbranches = \{\}\nsub_branches = \{\}\n\n\ndef refresh(frame=nuke.frame(), animation=False):\n\n    global branches, sub_branches\n    branches = get_branches()\n    sub_branches = get_branches(True)\n\n    seed = int(nuke.thisNode().knob('seed').value())\n\n    for i, key in enumerate(branches):\n        root_branch = branches\[key]\['root']\n\n        refresh_branches(root_branch, frame, animation, seed + i)\n        wave_smooth(root_branch, frame, branches, seed + i)\n\n    curves().changed()\n\n    for i, key in enumerate(sub_branches):\n        root_branch = sub_branches\[key]\['root']\n\n        refresh_sub_branches(root_branch, frame, animation, seed + 10 + i)\n        wave_smooth(root_branch, frame, sub_branches, seed + 10 + i)\n\n    curves().changed()\n\n\ndef refresh_branches(root_spline, frame, animation, seed):\n\n    _branches = branches\[root_spline.name]\['branches']\n\n    for i, branch in enumerate(_branches):\n        seed += i\n\n        random.seed(seed + 1)\n        section = random.randrange(0, len(root_spline) - 1)\n\n        random.seed(seed + 5)\n        slide_position = random.random()\n\n        left_seed = seed + 15\n\n        transform_branch(root_spline, branch, section,\n                         slide_position, frame, seed + 7, left_seed, animation)\n\n        branch_shape(branch, seed + 10, left_seed)\n\n\ndef refresh_sub_branches(root_branch, frame, animation, seed):\n\n    _sub_branches = sub_branches\[root_branch.name]\['branches']\n    _branches = branches\[root_branch.name]\['branches']\n\n    for i, branch in enumerate(_sub_branches):\n        random.seed(seed + 1)\n        root_spline = random.choice(_branches)\n\n        seed += i\n\n        random.seed(seed + 4)\n        section = random.randrange(0, len(root_spline) - 1)\n\n        random.seed(seed + 7)\n        slide_position = random.random()\n\n        left_seed = seed + 15\n\n        transform_branch(root_spline, branch, section,\n                         slide_position, frame, seed + 7, left_seed, animation)\n\n        branch_shape(branch, seed + 10, left_seed)\n\n\ndef bake():\n    # Probar render dialog para bake !!!\n    #  nukescripts.renderdialog._gRenderDialogState.saveValue('frame_range', 'custom')\n    #  nukescripts.renderdialog.showRenderDialog(nuke.selectedNodes())\n    clean_bake()\n\n    this = nuke.thisNode()\n    first = int(this.knob('first').value())\n    last = int(this.knob('last').value())\n    each = int(this.knob('each_frame').value())\n\n    progress = nuke.ProgressTask('Branches Baking')\n\n    _range = list( range(first, last, each) )\n    _range.append(last)\n\n    section = 100.0 / len(_range)\n    percent = 0\n\n    for frame in _range:\n        progress.setMessage('Baking frame: \{0\} ...'.format(frame))\n        progress.setProgress(int(percent))\n        percent += section\n\n        if progress.isCancelled():\n            break\n\n        refresh(frame, True)\n\n    del progress\n\n\ndef clean_bake():\n    def clean(branch):\n        tm = branch.getTransform()\n\n        tm.getTranslationAnimCurve(0).removeAllKeys()\n        tm.getTranslationAnimCurve(1).removeAllKeys()\n        tm.getRotationAnimCurve(2).removeAllKeys()\n\n    for _, item in get_branches().items():\n        for branch in item\['branches']:\n            clean(branch)\n\n    for _, item in get_branches(True).items():\n        for branch in item\['branches']:\n            clean(branch)\n\n    curves().changed()\n\n\ndef transform_branch(root_spline, branch, section, slide_position, frame, seed, left_seed, animation=False):\n    this = nuke.thisNode()\n\n    x, y, _ = bezier_by_section(root_spline, section, slide_position, frame)\n\n    # Translate\n    root_transform = root_spline.getTransform()\n\n    root_x = root_transform.getTranslationAnimCurve(0).evaluate(frame)\n    root_y = root_transform.getTranslationAnimCurve(1).evaluate(frame)\n    parent_rotate = root_transform.getRotationAnimCurve(2).evaluate(frame)\n\n    x += root_x\n    y += root_y\n\n    x, y, _ = rotate_point((root_x, root_y), (x, y), -parent_rotate)\n\n    # Angle\n    if 'sub_branch' in branch.name:\n        min_angle = int(this.knob('min_sub_branch_angle').value())\n        max_angle = int(this.knob('max_sub_branch_angle').value())\n\n    else:\n        min_angle = int(this.knob('min_branch_angle').value())\n        max_angle = int(this.knob('max_branch_angle').value())\n\n    p1 = bezier_by_section(root_spline, section, slide_position + .01, frame)\n    p2 = bezier_by_section(root_spline, section, slide_position - .01, frame)\n\n    root_angle = angle_two_points(p1, p2)\n\n    random.seed(left_seed)\n    left_angle = random.choice(\[True, False])\n\n    random.seed(seed + 20)\n    angle = random.randrange(min_angle, max_angle)\n\n    if left_angle:\n        angle *= -1\n\n    angle = angle - root_angle + parent_rotate\n\n    tm = branch.getTransform()\n\n    if animation:\n        tm.getRotationAnimCurve(2).addKey(frame, angle)\n        tm.getTranslationAnimCurve(0).addKey(frame, x)\n        tm.getTranslationAnimCurve(1).addKey(frame, y)\n    else:\n        tm.getRotationAnimCurve(2).constantValue = angle\n        tm.getTranslationAnimCurve(0).constantValue = x\n        tm.getTranslationAnimCurve(1).constantValue = y\n\n    tm.getPivotPointAnimCurve(0).constantValue = 0\n    tm.getPivotPointAnimCurve(1).constantValue = 0\n\n\ndef bezier_by_section(root_spline, section, slide_position, frame):\n    p1 = root_spline\[section].center.getPosition(frame)\n    p2 = root_spline\[section].rightTangent.getPosition(frame) + p1\n    p4 = root_spline\[section + 1].center.getPosition(frame)\n    p3 = root_spline\[section + 1].leftTangent.getPosition(frame) + p4\n\n    bezier = cubic_bezier(p1, p2, p3, p4, slide_position)\n\n    return bezier\n\n\ndef wave_smooth(root_branch, frame, branches, seed):\n\n    smooth = nuke.thisNode().knob('wave_smooth').value()\n    break_branch = nuke.thisNode().knob('break').value()\n    break_width = nuke.thisNode().knob('break_width').value()\n\n    if smooth == 1:\n        smooth -= 0.0001\n\n    _branches = branches\[root_branch.name]\['branches']\n\n    for b, branch in enumerate(_branches):\n        last_point_index = len(branch) - 1\n\n        for i, p in enumerate(branch):\n            if i == 0 or i == last_point_index:\n                p.rightTangent.setPosition((0, 0, 0))\n                p.leftTangent.setPosition((0, 0, 0))\n                continue\n\n            back_center = branch\[i - 1].center.getPosition(frame)\n            fore_center = branch\[i + 1].center.getPosition(frame)\n            center = p.center.getPosition(frame)\n\n            right = p.rightTangent\n            left = p.leftTangent\n\n            angle = angle_two_points(back_center, fore_center)\n\n            # Left\n            llength = math.hypot(\n                back_center\[0] - center\[0], back_center\[1] - center\[1])\n\n            if not i == 1:\n                llength /= 2\n\n            llength *= smooth\n\n            random.seed(seed + 3 + b)\n            break_angle = break_branch * random.choice(\[90, -90])\n            llength *= break_width\n\n            lpos = rotate_point(\n                center, (center\[0], center\[1] + llength), angle + break_angle)\n\n            left_pos = (lpos\[0] - center\[0], lpos\[1] - center\[1], 0)\n\n            left.setPosition(left_pos)\n\n            # Right\n            rlength = math.hypot(\n                fore_center\[0] - center\[0], fore_center\[1] - center\[1])\n\n            if not i == last_point_index - 1:\n                rlength /= 2\n\n            rlength *= smooth\n\n            rpos = rotate_point(\n                center, (center\[0], center\[1] + rlength), angle - 180)\n            right_pos = (rpos\[0] - center\[0], rpos\[1] - center\[1], 0)\n\n            right.setPosition(right_pos)\n\n\ndef branch_shape(branch, seed, left_seed):\n\n    this = nuke.thisNode()\n\n    if 'sub_branch' in branch.name:\n        min_length = int(this.knob('min_sub_branch_length').value())\n        max_length = int(this.knob('max_sub_branch_length').value())\n    else:\n        min_length = int(this.knob('min_branch_length').value())\n        max_length = int(this.knob('max_branch_length').value())\n\n    random.seed(seed + 30)\n    length = random.randrange(min_length, max_length)\n\n    branch\[0].center.setPosition((0, 0, 0))\n\n    last_point = branch\[-1]\n    last_point.center.setPosition((0, length, 0))\n\n    # Inside points\n    separation_random = this.knob('separation_random').value()\n\n    inside_point_count = len(branch) - 2\n\n    random.seed(seed + 40)\n    ypos_random = random.sample(range(1, length - 1), inside_point_count)\n\n    min_wave = int(this.knob('min_wave').value())\n    max_wave = int(this.knob('max_wave').value())\n\n    random.seed(seed + 50)\n    wave = random.randrange(min_wave, max_wave)\n\n    wave /= 200.0 / length\n\n    length_section = length / (len(branch) - 1)\n    ypos = 0\n\n    for i, ypos_rand in enumerate(sorted(ypos_random)):\n\n        random.seed(seed + 60 + i)\n        if random.choice(\[True, False]):\n            wave *= -1\n\n        ypos += length_section\n\n        mix_ypos = (ypos_rand - ypos) * separation_random + ypos\n\n        branch\[i + 1].center.setPosition((wave, mix_ypos, 0))\n\n    # wavy\n    min_wavy = this.knob('min_wavy').value()\n    max_wavy = this.knob('max_wavy').value()\n\n    random.seed(seed + 70)\n    wavy = random.uniform(min_wavy, max_wavy) * 2\n\n    random.seed(left_seed)\n    left_direction = random.choice(\[True, False])\n\n    if left_direction:\n        wavy *= -1\n\n    exp = 2\n\n    for i, p in enumerate(branch):\n        if i == 0:\n            continue\n\n        point = p.center.getPosition(0)\n        _wavy = wavy * exp\n\n        rotated = rotate_point((0, 0, 0), point, _wavy)\n        p.center.setPosition(rotated)\n\n        exp *= 2\n\n\ndef angle_two_points(p1, p2):\n    delta_x = p1\[0] - p2\[0]\n    delta_y = p1\[1] - p2\[1]\n\n    return math.atan2(delta_x, delta_y) * 180 / math.pi\n\n\ndef rotate_point(center, point, angle):\n\n    angle = -angle * math.pi / 180\n\n    cx = center\[0]\n    cy = center\[1]\n\n    px = point\[0]\n    py = point\[1]\n\n    s = math.sin(angle)\n    c = math.cos(angle)\n\n    px -= cx\n    py -= cy\n\n    xnew = px * c - py * s\n    ynew = px * s + py * c\n\n    px = xnew + cx\n    py = ynew + cy\n\n    return (px, py, 0)\n\n\ndef cubic_bezier(p1, p2, p3, p4, value):\n    L1 = ((1 - value) * p1) + (value * p2)\n    L2 = ((1 - value) * p2) + (value * p3)\n    L3 = ((1 - value) * p3) + (value * p4)\n\n    Q1 = ((1 - value) * L1) + (L2 * value)\n    Q2 = ((1 - value) * L2) + (L3 * value)\n\n    return ((1 - value) * Q1) + (Q2 * value)\n\n\ndef curves():\n    splines = nuke.toNode('splines')\n    return splines\['curves']\n\n\ndef root_layers():\n    return curves().rootLayer\n\ncreate_branches()" +STARTLINE}
+ addUserKnob {26 ""}
+ addUserKnob {7 min_branch_angle l "Branch Angle" R 0 90}
+ addUserKnob {7 max_branch_angle l "" -STARTLINE R 0 90}
+ max_branch_angle 50
+ addUserKnob {7 min_branch_length l "Branch Length" R 10 1000}
+ min_branch_length 60
+ addUserKnob {7 max_branch_length l "" -STARTLINE R 10 1000}
+ max_branch_length 450
+ addUserKnob {26 ""}
+ addUserKnob {7 min_sub_branch_angle l "SubBranch Angle" R 0 90}
+ min_sub_branch_angle 10
+ addUserKnob {7 max_sub_branch_angle l "" -STARTLINE R 0 90}
+ max_sub_branch_angle 40
+ addUserKnob {7 min_sub_branch_length l "SubBranch Length" R 10 1000}
+ min_sub_branch_length 10
+ addUserKnob {7 max_sub_branch_length l "" -STARTLINE R 10 1000}
+ max_sub_branch_length 150
+ addUserKnob {26 ""}
+ addUserKnob {7 min_wave l Wave R 0 100}
+ min_wave 3
+ addUserKnob {7 max_wave l "" -STARTLINE R 0 100}
+ max_wave 7
+ addUserKnob {7 min_wavy l Wavy R -1 1}
+ addUserKnob {7 max_wavy l "" -STARTLINE R -1 1}
+ max_wavy 0.5
+ addUserKnob {7 separation_random l "Separation Random"}
+ separation_random 0.5
+ addUserKnob {26 ""}
+ addUserKnob {7 wave_smooth l "Wave Smooth"}
+ wave_smooth 1
+ addUserKnob {7 break l Break}
+ break 1
+ addUserKnob {7 break_width l "Break Width"}
+ break_width 0.16
+ addUserKnob {26 ""}
+ addUserKnob {3 seed l Seed}
+ seed 3
+ addUserKnob {22 refresh l Refresh -STARTLINE T "# Author: Francisco Jose Contreras Cuevas\n# Office: VFX Artist - Senior Compositor\n# Website: vinavfx.com\nimport nuke\nimport nuke.rotopaint as rp\nimport math\nimport random\n\n\ndef create_branches():\n    root_branch = get_root_branch()\n    this = nuke.thisNode()\n\n    if not root_branch:\n        return\n\n    root_layers().removeAll()\n\n    branches = int(this.knob('branches').value())\n    sub_branches = int(this.knob('sub_branches').value())\n    seed = int(this.knob('seed').value())\n\n    root_branches = get_root_branches()\n\n    total = (branches + sub_branches) * len(root_branches)\n    section = 100.0 / total\n    percent = 0\n\n    for root_branch in root_branches:\n\n        progress = nuke.ProgressTask('Creating Branches')\n\n        for i in range(branches):\n            progress.setMessage('Creating branch: \{0\} ...'.format(i))\n            progress.setProgress(int(percent))\n            percent += section\n\n            if progress.isCancelled():\n                break\n\n            name = 'main_branch_\{0\}_root_\{1\}'.format(i, root_branch.name)\n            add_spline(name, seed + i + 100)\n\n        for i in range(sub_branches):\n            progress.setMessage('Creating branch: \{0\} ...'.format(i))\n            progress.setProgress(int(percent))\n            percent += section\n\n            if progress.isCancelled():\n                break\n\n            name = 'sub_branch_\{0\}_root_\{1\}'.format(i, root_branch.name)\n            add_spline(name, seed + i + 200, True)\n\n    del progress\n\n    refresh()\n\n\ndef add_spline(name, seed, sub_branch=False):\n    this = nuke.thisNode()\n\n    samples = nuke.toNode('spline_samples')\n    curves = samples\['curves']\n\n    div = this.knob('branches_divitions').value().replace(' Divitions', '')\n    if div == 'Random':\n        divs = \[4, 5, 6, 7]\n        random.seed(seed)\n        div = random.choice(divs)\n\n    if sub_branch:\n        min_width = int(this.knob('min_sub_branch_width').value())\n        max_width = int(this.knob('max_sub_branch_width').value())\n    else:\n        min_width = int(this.knob('min_branch_width').value())\n        max_width = int(this.knob('max_branch_width').value())\n\n    if min_width >= max_width:\n        width = min_width\n    else:\n        widths = \['05', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']\n        widths = widths\[min_width - 1:max_width]\n        random.seed(seed + 10)\n        width = random.choice(widths)\n\n    layer = curves.toElement('div_\{0\}_width_\{1\}'.format(div, width))\n\n    spline = layer.clone()\n    if name:\n        spline.name = name\n\n    root_layers().append(spline)\n\n    spline.locked = False\n\n    attr = spline.getAttributes()\n\n    if sub_branch:\n        attr.set('r', 0)\n        attr.set('g', 1)\n        attr.set('b', 0)\n    else:\n        attr.set('r', 1)\n        attr.set('g', 0)\n        attr.set('b', 0)\n\n    return spline\n\n\ndef get_branches(sub_branch=False):\n    branches = \{\}\n\n    roto = nuke.thisNode().input(0)\n\n    if not roto:\n        return \{\}\n    if not roto.Class() == 'Roto':\n        return \{\}\n\n    curves = roto\['curves']\n\n    prefix = 'sub_branch' if sub_branch else 'main_branch'\n\n    for l in root_layers():\n        if prefix in l.name:\n\n            root_name = l.name.split('root_')\[-1]\n\n            if not root_name in branches:\n                branches\[root_name] = \{\n                    'root': curves.toElement(root_name),\n                    'branches': \[]\n                \}\n\n            branches\[root_name]\['branches'].append(l)\n\n    return branches\n\n\ndef get_root_branch():\n\n    roto = nuke.thisNode().input(0)\n\n    if not roto:\n        nuke.message(\"Must connect a 'Roto' node !\")\n        return\n\n    if not roto.Class() == 'Roto':\n        nuke.message(\"Must connect a 'Roto' node !\")\n        return\n\n    root_layer = roto\['curves'].rootLayer\n\n    return root_layer\[0]\n\n\ndef get_root_branches():\n\n    roto = nuke.thisNode().input(0)\n\n    if not roto:\n        nuke.message(\"Must connect a 'Roto' node !\")\n        return \[]\n\n    if not roto.Class() == 'Roto':\n        nuke.message(\"Must connect a 'Roto' node !\")\n        return \[]\n\n    root_layer = roto\['curves'].rootLayer\n\n    return root_layer\n\n\nbranches = \{\}\nsub_branches = \{\}\n\n\ndef refresh(frame=nuke.frame(), animation=False):\n\n    global branches, sub_branches\n    branches = get_branches()\n    sub_branches = get_branches(True)\n\n    seed = int(nuke.thisNode().knob('seed').value())\n\n    for i, key in enumerate(branches):\n        root_branch = branches\[key]\['root']\n\n        refresh_branches(root_branch, frame, animation, seed + i)\n        wave_smooth(root_branch, frame, branches, seed + i)\n\n    curves().changed()\n\n    for i, key in enumerate(sub_branches):\n        root_branch = sub_branches\[key]\['root']\n\n        refresh_sub_branches(root_branch, frame, animation, seed + 10 + i)\n        wave_smooth(root_branch, frame, sub_branches, seed + 10 + i)\n\n    curves().changed()\n\n\ndef refresh_branches(root_spline, frame, animation, seed):\n\n    _branches = branches\[root_spline.name]\['branches']\n\n    for i, branch in enumerate(_branches):\n        seed += i\n\n        random.seed(seed + 1)\n        section = random.randrange(0, len(root_spline) - 1)\n\n        random.seed(seed + 5)\n        slide_position = random.random()\n\n        left_seed = seed + 15\n\n        transform_branch(root_spline, branch, section,\n                         slide_position, frame, seed + 7, left_seed, animation)\n\n        branch_shape(branch, seed + 10, left_seed)\n\n\ndef refresh_sub_branches(root_branch, frame, animation, seed):\n\n    _sub_branches = sub_branches\[root_branch.name]\['branches']\n    _branches = branches\[root_branch.name]\['branches']\n\n    for i, branch in enumerate(_sub_branches):\n        random.seed(seed + 1)\n        root_spline = random.choice(_branches)\n\n        seed += i\n\n        random.seed(seed + 4)\n        section = random.randrange(0, len(root_spline) - 1)\n\n        random.seed(seed + 7)\n        slide_position = random.random()\n\n        left_seed = seed + 15\n\n        transform_branch(root_spline, branch, section,\n                         slide_position, frame, seed + 7, left_seed, animation)\n\n        branch_shape(branch, seed + 10, left_seed)\n\n\ndef bake():\n    # Probar render dialog para bake !!!\n    #  nukescripts.renderdialog._gRenderDialogState.saveValue('frame_range', 'custom')\n    #  nukescripts.renderdialog.showRenderDialog(nuke.selectedNodes())\n    clean_bake()\n\n    this = nuke.thisNode()\n    first = int(this.knob('first').value())\n    last = int(this.knob('last').value())\n    each = int(this.knob('each_frame').value())\n\n    progress = nuke.ProgressTask('Branches Baking')\n\n    _range = list( range(first, last, each) )\n    _range.append(last)\n\n    section = 100.0 / len(_range)\n    percent = 0\n\n    for frame in _range:\n        progress.setMessage('Baking frame: \{0\} ...'.format(frame))\n        progress.setProgress(int(percent))\n        percent += section\n\n        if progress.isCancelled():\n            break\n\n        refresh(frame, True)\n\n    del progress\n\n\ndef clean_bake():\n    def clean(branch):\n        tm = branch.getTransform()\n\n        tm.getTranslationAnimCurve(0).removeAllKeys()\n        tm.getTranslationAnimCurve(1).removeAllKeys()\n        tm.getRotationAnimCurve(2).removeAllKeys()\n\n    for _, item in get_branches().items():\n        for branch in item\['branches']:\n            clean(branch)\n\n    for _, item in get_branches(True).items():\n        for branch in item\['branches']:\n            clean(branch)\n\n    curves().changed()\n\n\ndef transform_branch(root_spline, branch, section, slide_position, frame, seed, left_seed, animation=False):\n    this = nuke.thisNode()\n\n    x, y, _ = bezier_by_section(root_spline, section, slide_position, frame)\n\n    # Translate\n    root_transform = root_spline.getTransform()\n\n    root_x = root_transform.getTranslationAnimCurve(0).evaluate(frame)\n    root_y = root_transform.getTranslationAnimCurve(1).evaluate(frame)\n    parent_rotate = root_transform.getRotationAnimCurve(2).evaluate(frame)\n\n    x += root_x\n    y += root_y\n\n    x, y, _ = rotate_point((root_x, root_y), (x, y), -parent_rotate)\n\n    # Angle\n    if 'sub_branch' in branch.name:\n        min_angle = int(this.knob('min_sub_branch_angle').value())\n        max_angle = int(this.knob('max_sub_branch_angle').value())\n\n    else:\n        min_angle = int(this.knob('min_branch_angle').value())\n        max_angle = int(this.knob('max_branch_angle').value())\n\n    p1 = bezier_by_section(root_spline, section, slide_position + .01, frame)\n    p2 = bezier_by_section(root_spline, section, slide_position - .01, frame)\n\n    root_angle = angle_two_points(p1, p2)\n\n    random.seed(left_seed)\n    left_angle = random.choice(\[True, False])\n\n    random.seed(seed + 20)\n    angle = random.randrange(min_angle, max_angle)\n\n    if left_angle:\n        angle *= -1\n\n    angle = angle - root_angle + parent_rotate\n\n    tm = branch.getTransform()\n\n    if animation:\n        tm.getRotationAnimCurve(2).addKey(frame, angle)\n        tm.getTranslationAnimCurve(0).addKey(frame, x)\n        tm.getTranslationAnimCurve(1).addKey(frame, y)\n    else:\n        tm.getRotationAnimCurve(2).constantValue = angle\n        tm.getTranslationAnimCurve(0).constantValue = x\n        tm.getTranslationAnimCurve(1).constantValue = y\n\n    tm.getPivotPointAnimCurve(0).constantValue = 0\n    tm.getPivotPointAnimCurve(1).constantValue = 0\n\n\ndef bezier_by_section(root_spline, section, slide_position, frame):\n    p1 = root_spline\[section].center.getPosition(frame)\n    p2 = root_spline\[section].rightTangent.getPosition(frame) + p1\n    p4 = root_spline\[section + 1].center.getPosition(frame)\n    p3 = root_spline\[section + 1].leftTangent.getPosition(frame) + p4\n\n    bezier = cubic_bezier(p1, p2, p3, p4, slide_position)\n\n    return bezier\n\n\ndef wave_smooth(root_branch, frame, branches, seed):\n\n    smooth = nuke.thisNode().knob('wave_smooth').value()\n    break_branch = nuke.thisNode().knob('break').value()\n    break_width = nuke.thisNode().knob('break_width').value()\n\n    if smooth == 1:\n        smooth -= 0.0001\n\n    _branches = branches\[root_branch.name]\['branches']\n\n    for b, branch in enumerate(_branches):\n        last_point_index = len(branch) - 1\n\n        for i, p in enumerate(branch):\n            if i == 0 or i == last_point_index:\n                p.rightTangent.setPosition((0, 0, 0))\n                p.leftTangent.setPosition((0, 0, 0))\n                continue\n\n            back_center = branch\[i - 1].center.getPosition(frame)\n            fore_center = branch\[i + 1].center.getPosition(frame)\n            center = p.center.getPosition(frame)\n\n            right = p.rightTangent\n            left = p.leftTangent\n\n            angle = angle_two_points(back_center, fore_center)\n\n            # Left\n            llength = math.hypot(\n                back_center\[0] - center\[0], back_center\[1] - center\[1])\n\n            if not i == 1:\n                llength /= 2\n\n            llength *= smooth\n\n            random.seed(seed + 3 + b)\n            break_angle = break_branch * random.choice(\[90, -90])\n            llength *= break_width\n\n            lpos = rotate_point(\n                center, (center\[0], center\[1] + llength), angle + break_angle)\n\n            left_pos = (lpos\[0] - center\[0], lpos\[1] - center\[1], 0)\n\n            left.setPosition(left_pos)\n\n            # Right\n            rlength = math.hypot(\n                fore_center\[0] - center\[0], fore_center\[1] - center\[1])\n\n            if not i == last_point_index - 1:\n                rlength /= 2\n\n            rlength *= smooth\n\n            rpos = rotate_point(\n                center, (center\[0], center\[1] + rlength), angle - 180)\n            right_pos = (rpos\[0] - center\[0], rpos\[1] - center\[1], 0)\n\n            right.setPosition(right_pos)\n\n\ndef branch_shape(branch, seed, left_seed):\n\n    this = nuke.thisNode()\n\n    if 'sub_branch' in branch.name:\n        min_length = int(this.knob('min_sub_branch_length').value())\n        max_length = int(this.knob('max_sub_branch_length').value())\n    else:\n        min_length = int(this.knob('min_branch_length').value())\n        max_length = int(this.knob('max_branch_length').value())\n\n    random.seed(seed + 30)\n    length = random.randrange(min_length, max_length)\n\n    branch\[0].center.setPosition((0, 0, 0))\n\n    last_point = branch\[-1]\n    last_point.center.setPosition((0, length, 0))\n\n    # Inside points\n    separation_random = this.knob('separation_random').value()\n\n    inside_point_count = len(branch) - 2\n\n    random.seed(seed + 40)\n    ypos_random = random.sample(range(1, length - 1), inside_point_count)\n\n    min_wave = int(this.knob('min_wave').value())\n    max_wave = int(this.knob('max_wave').value())\n\n    random.seed(seed + 50)\n    wave = random.randrange(min_wave, max_wave)\n\n    wave /= 200.0 / length\n\n    length_section = length / (len(branch) - 1)\n    ypos = 0\n\n    for i, ypos_rand in enumerate(sorted(ypos_random)):\n\n        random.seed(seed + 60 + i)\n        if random.choice(\[True, False]):\n            wave *= -1\n\n        ypos += length_section\n\n        mix_ypos = (ypos_rand - ypos) * separation_random + ypos\n\n        branch\[i + 1].center.setPosition((wave, mix_ypos, 0))\n\n    # wavy\n    min_wavy = this.knob('min_wavy').value()\n    max_wavy = this.knob('max_wavy').value()\n\n    random.seed(seed + 70)\n    wavy = random.uniform(min_wavy, max_wavy) * 2\n\n    random.seed(left_seed)\n    left_direction = random.choice(\[True, False])\n\n    if left_direction:\n        wavy *= -1\n\n    exp = 2\n\n    for i, p in enumerate(branch):\n        if i == 0:\n            continue\n\n        point = p.center.getPosition(0)\n        _wavy = wavy * exp\n\n        rotated = rotate_point((0, 0, 0), point, _wavy)\n        p.center.setPosition(rotated)\n\n        exp *= 2\n\n\ndef angle_two_points(p1, p2):\n    delta_x = p1\[0] - p2\[0]\n    delta_y = p1\[1] - p2\[1]\n\n    return math.atan2(delta_x, delta_y) * 180 / math.pi\n\n\ndef rotate_point(center, point, angle):\n\n    angle = -angle * math.pi / 180\n\n    cx = center\[0]\n    cy = center\[1]\n\n    px = point\[0]\n    py = point\[1]\n\n    s = math.sin(angle)\n    c = math.cos(angle)\n\n    px -= cx\n    py -= cy\n\n    xnew = px * c - py * s\n    ynew = px * s + py * c\n\n    px = xnew + cx\n    py = ynew + cy\n\n    return (px, py, 0)\n\n\ndef cubic_bezier(p1, p2, p3, p4, value):\n    L1 = ((1 - value) * p1) + (value * p2)\n    L2 = ((1 - value) * p2) + (value * p3)\n    L3 = ((1 - value) * p3) + (value * p4)\n\n    Q1 = ((1 - value) * L1) + (L2 * value)\n    Q2 = ((1 - value) * L2) + (L3 * value)\n\n    return ((1 - value) * Q1) + (Q2 * value)\n\n\ndef curves():\n    splines = nuke.toNode('splines')\n    return splines\['curves']\n\n\ndef root_layers():\n    return curves().rootLayer\n\nrefresh()"}
+ addUserKnob {26 ""}
+ addUserKnob {3 first l "Frame Range"}
+ first 1
+ addUserKnob {3 last l "" -STARTLINE}
+ last 100
+ addUserKnob {3 each_frame l "" -STARTLINE}
+ each_frame 2
+ addUserKnob {22 bake l Bake -STARTLINE T "# Author: Francisco Jose Contreras Cuevas\n# Office: VFX Artist - Senior Compositor\n# Website: vinavfx.com\nimport nuke\nimport nuke.rotopaint as rp\nimport math\nimport random\n\n\ndef create_branches():\n    root_branch = get_root_branch()\n    this = nuke.thisNode()\n\n    if not root_branch:\n        return\n\n    root_layers().removeAll()\n\n    branches = int(this.knob('branches').value())\n    sub_branches = int(this.knob('sub_branches').value())\n    seed = int(this.knob('seed').value())\n\n    root_branches = get_root_branches()\n\n    total = (branches + sub_branches) * len(root_branches)\n    section = 100.0 / total\n    percent = 0\n\n    for root_branch in root_branches:\n\n        progress = nuke.ProgressTask('Creating Branches')\n\n        for i in range(branches):\n            progress.setMessage('Creating branch: \{0\} ...'.format(i))\n            progress.setProgress(int(percent))\n            percent += section\n\n            if progress.isCancelled():\n                break\n\n            name = 'main_branch_\{0\}_root_\{1\}'.format(i, root_branch.name)\n            add_spline(name, seed + i + 100)\n\n        for i in range(sub_branches):\n            progress.setMessage('Creating branch: \{0\} ...'.format(i))\n            progress.setProgress(int(percent))\n            percent += section\n\n            if progress.isCancelled():\n                break\n\n            name = 'sub_branch_\{0\}_root_\{1\}'.format(i, root_branch.name)\n            add_spline(name, seed + i + 200, True)\n\n    del progress\n\n    refresh()\n\n\ndef add_spline(name, seed, sub_branch=False):\n    this = nuke.thisNode()\n\n    samples = nuke.toNode('spline_samples')\n    curves = samples\['curves']\n\n    div = this.knob('branches_divitions').value().replace(' Divitions', '')\n    if div == 'Random':\n        divs = \[4, 5, 6, 7]\n        random.seed(seed)\n        div = random.choice(divs)\n\n    if sub_branch:\n        min_width = int(this.knob('min_sub_branch_width').value())\n        max_width = int(this.knob('max_sub_branch_width').value())\n    else:\n        min_width = int(this.knob('min_branch_width').value())\n        max_width = int(this.knob('max_branch_width').value())\n\n    if min_width >= max_width:\n        width = min_width\n    else:\n        widths = \['05', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']\n        widths = widths\[min_width - 1:max_width]\n        random.seed(seed + 10)\n        width = random.choice(widths)\n\n    layer = curves.toElement('div_\{0\}_width_\{1\}'.format(div, width))\n\n    spline = layer.clone()\n    if name:\n        spline.name = name\n\n    root_layers().append(spline)\n\n    spline.locked = False\n\n    attr = spline.getAttributes()\n\n    if sub_branch:\n        attr.set('r', 0)\n        attr.set('g', 1)\n        attr.set('b', 0)\n    else:\n        attr.set('r', 1)\n        attr.set('g', 0)\n        attr.set('b', 0)\n\n    return spline\n\n\ndef get_branches(sub_branch=False):\n    branches = \{\}\n\n    roto = nuke.thisNode().input(0)\n\n    if not roto:\n        return \{\}\n    if not roto.Class() == 'Roto':\n        return \{\}\n\n    curves = roto\['curves']\n\n    prefix = 'sub_branch' if sub_branch else 'main_branch'\n\n    for l in root_layers():\n        if prefix in l.name:\n\n            root_name = l.name.split('root_')\[-1]\n\n            if not root_name in branches:\n                branches\[root_name] = \{\n                    'root': curves.toElement(root_name),\n                    'branches': \[]\n                \}\n\n            branches\[root_name]\['branches'].append(l)\n\n    return branches\n\n\ndef get_root_branch():\n\n    roto = nuke.thisNode().input(0)\n\n    if not roto:\n        nuke.message(\"Must connect a 'Roto' node !\")\n        return\n\n    if not roto.Class() == 'Roto':\n        nuke.message(\"Must connect a 'Roto' node !\")\n        return\n\n    root_layer = roto\['curves'].rootLayer\n\n    return root_layer\[0]\n\n\ndef get_root_branches():\n\n    roto = nuke.thisNode().input(0)\n\n    if not roto:\n        nuke.message(\"Must connect a 'Roto' node !\")\n        return \[]\n\n    if not roto.Class() == 'Roto':\n        nuke.message(\"Must connect a 'Roto' node !\")\n        return \[]\n\n    root_layer = roto\['curves'].rootLayer\n\n    return root_layer\n\n\nbranches = \{\}\nsub_branches = \{\}\n\n\ndef refresh(frame=nuke.frame(), animation=False):\n\n    global branches, sub_branches\n    branches = get_branches()\n    sub_branches = get_branches(True)\n\n    seed = int(nuke.thisNode().knob('seed').value())\n\n    for i, key in enumerate(branches):\n        root_branch = branches\[key]\['root']\n\n        refresh_branches(root_branch, frame, animation, seed + i)\n        wave_smooth(root_branch, frame, branches, seed + i)\n\n    curves().changed()\n\n    for i, key in enumerate(sub_branches):\n        root_branch = sub_branches\[key]\['root']\n\n        refresh_sub_branches(root_branch, frame, animation, seed + 10 + i)\n        wave_smooth(root_branch, frame, sub_branches, seed + 10 + i)\n\n    curves().changed()\n\n\ndef refresh_branches(root_spline, frame, animation, seed):\n\n    _branches = branches\[root_spline.name]\['branches']\n\n    for i, branch in enumerate(_branches):\n        seed += i\n\n        random.seed(seed + 1)\n        section = random.randrange(0, len(root_spline) - 1)\n\n        random.seed(seed + 5)\n        slide_position = random.random()\n\n        left_seed = seed + 15\n\n        transform_branch(root_spline, branch, section,\n                         slide_position, frame, seed + 7, left_seed, animation)\n\n        branch_shape(branch, seed + 10, left_seed)\n\n\ndef refresh_sub_branches(root_branch, frame, animation, seed):\n\n    _sub_branches = sub_branches\[root_branch.name]\['branches']\n    _branches = branches\[root_branch.name]\['branches']\n\n    for i, branch in enumerate(_sub_branches):\n        random.seed(seed + 1)\n        root_spline = random.choice(_branches)\n\n        seed += i\n\n        random.seed(seed + 4)\n        section = random.randrange(0, len(root_spline) - 1)\n\n        random.seed(seed + 7)\n        slide_position = random.random()\n\n        left_seed = seed + 15\n\n        transform_branch(root_spline, branch, section,\n                         slide_position, frame, seed + 7, left_seed, animation)\n\n        branch_shape(branch, seed + 10, left_seed)\n\n\ndef bake():\n    # Probar render dialog para bake !!!\n    #  nukescripts.renderdialog._gRenderDialogState.saveValue('frame_range', 'custom')\n    #  nukescripts.renderdialog.showRenderDialog(nuke.selectedNodes())\n    clean_bake()\n\n    this = nuke.thisNode()\n    first = int(this.knob('first').value())\n    last = int(this.knob('last').value())\n    each = int(this.knob('each_frame').value())\n\n    progress = nuke.ProgressTask('Branches Baking')\n\n    _range = list( range(first, last, each) )\n    _range.append(last)\n\n    section = 100.0 / len(_range)\n    percent = 0\n\n    for frame in _range:\n        progress.setMessage('Baking frame: \{0\} ...'.format(frame))\n        progress.setProgress(int(percent))\n        percent += section\n\n        if progress.isCancelled():\n            break\n\n        refresh(frame, True)\n\n    del progress\n\n\ndef clean_bake():\n    def clean(branch):\n        tm = branch.getTransform()\n\n        tm.getTranslationAnimCurve(0).removeAllKeys()\n        tm.getTranslationAnimCurve(1).removeAllKeys()\n        tm.getRotationAnimCurve(2).removeAllKeys()\n\n    for _, item in get_branches().items():\n        for branch in item\['branches']:\n            clean(branch)\n\n    for _, item in get_branches(True).items():\n        for branch in item\['branches']:\n            clean(branch)\n\n    curves().changed()\n\n\ndef transform_branch(root_spline, branch, section, slide_position, frame, seed, left_seed, animation=False):\n    this = nuke.thisNode()\n\n    x, y, _ = bezier_by_section(root_spline, section, slide_position, frame)\n\n    # Translate\n    root_transform = root_spline.getTransform()\n\n    root_x = root_transform.getTranslationAnimCurve(0).evaluate(frame)\n    root_y = root_transform.getTranslationAnimCurve(1).evaluate(frame)\n    parent_rotate = root_transform.getRotationAnimCurve(2).evaluate(frame)\n\n    x += root_x\n    y += root_y\n\n    x, y, _ = rotate_point((root_x, root_y), (x, y), -parent_rotate)\n\n    # Angle\n    if 'sub_branch' in branch.name:\n        min_angle = int(this.knob('min_sub_branch_angle').value())\n        max_angle = int(this.knob('max_sub_branch_angle').value())\n\n    else:\n        min_angle = int(this.knob('min_branch_angle').value())\n        max_angle = int(this.knob('max_branch_angle').value())\n\n    p1 = bezier_by_section(root_spline, section, slide_position + .01, frame)\n    p2 = bezier_by_section(root_spline, section, slide_position - .01, frame)\n\n    root_angle = angle_two_points(p1, p2)\n\n    random.seed(left_seed)\n    left_angle = random.choice(\[True, False])\n\n    random.seed(seed + 20)\n    angle = random.randrange(min_angle, max_angle)\n\n    if left_angle:\n        angle *= -1\n\n    angle = angle - root_angle + parent_rotate\n\n    tm = branch.getTransform()\n\n    if animation:\n        tm.getRotationAnimCurve(2).addKey(frame, angle)\n        tm.getTranslationAnimCurve(0).addKey(frame, x)\n        tm.getTranslationAnimCurve(1).addKey(frame, y)\n    else:\n        tm.getRotationAnimCurve(2).constantValue = angle\n        tm.getTranslationAnimCurve(0).constantValue = x\n        tm.getTranslationAnimCurve(1).constantValue = y\n\n    tm.getPivotPointAnimCurve(0).constantValue = 0\n    tm.getPivotPointAnimCurve(1).constantValue = 0\n\n\ndef bezier_by_section(root_spline, section, slide_position, frame):\n    p1 = root_spline\[section].center.getPosition(frame)\n    p2 = root_spline\[section].rightTangent.getPosition(frame) + p1\n    p4 = root_spline\[section + 1].center.getPosition(frame)\n    p3 = root_spline\[section + 1].leftTangent.getPosition(frame) + p4\n\n    bezier = cubic_bezier(p1, p2, p3, p4, slide_position)\n\n    return bezier\n\n\ndef wave_smooth(root_branch, frame, branches, seed):\n\n    smooth = nuke.thisNode().knob('wave_smooth').value()\n    break_branch = nuke.thisNode().knob('break').value()\n    break_width = nuke.thisNode().knob('break_width').value()\n\n    if smooth == 1:\n        smooth -= 0.0001\n\n    _branches = branches\[root_branch.name]\['branches']\n\n    for b, branch in enumerate(_branches):\n        last_point_index = len(branch) - 1\n\n        for i, p in enumerate(branch):\n            if i == 0 or i == last_point_index:\n                p.rightTangent.setPosition((0, 0, 0))\n                p.leftTangent.setPosition((0, 0, 0))\n                continue\n\n            back_center = branch\[i - 1].center.getPosition(frame)\n            fore_center = branch\[i + 1].center.getPosition(frame)\n            center = p.center.getPosition(frame)\n\n            right = p.rightTangent\n            left = p.leftTangent\n\n            angle = angle_two_points(back_center, fore_center)\n\n            # Left\n            llength = math.hypot(\n                back_center\[0] - center\[0], back_center\[1] - center\[1])\n\n            if not i == 1:\n                llength /= 2\n\n            llength *= smooth\n\n            random.seed(seed + 3 + b)\n            break_angle = break_branch * random.choice(\[90, -90])\n            llength *= break_width\n\n            lpos = rotate_point(\n                center, (center\[0], center\[1] + llength), angle + break_angle)\n\n            left_pos = (lpos\[0] - center\[0], lpos\[1] - center\[1], 0)\n\n            left.setPosition(left_pos)\n\n            # Right\n            rlength = math.hypot(\n                fore_center\[0] - center\[0], fore_center\[1] - center\[1])\n\n            if not i == last_point_index - 1:\n                rlength /= 2\n\n            rlength *= smooth\n\n            rpos = rotate_point(\n                center, (center\[0], center\[1] + rlength), angle - 180)\n            right_pos = (rpos\[0] - center\[0], rpos\[1] - center\[1], 0)\n\n            right.setPosition(right_pos)\n\n\ndef branch_shape(branch, seed, left_seed):\n\n    this = nuke.thisNode()\n\n    if 'sub_branch' in branch.name:\n        min_length = int(this.knob('min_sub_branch_length').value())\n        max_length = int(this.knob('max_sub_branch_length').value())\n    else:\n        min_length = int(this.knob('min_branch_length').value())\n        max_length = int(this.knob('max_branch_length').value())\n\n    random.seed(seed + 30)\n    length = random.randrange(min_length, max_length)\n\n    branch\[0].center.setPosition((0, 0, 0))\n\n    last_point = branch\[-1]\n    last_point.center.setPosition((0, length, 0))\n\n    # Inside points\n    separation_random = this.knob('separation_random').value()\n\n    inside_point_count = len(branch) - 2\n\n    random.seed(seed + 40)\n    ypos_random = random.sample(range(1, length - 1), inside_point_count)\n\n    min_wave = int(this.knob('min_wave').value())\n    max_wave = int(this.knob('max_wave').value())\n\n    random.seed(seed + 50)\n    wave = random.randrange(min_wave, max_wave)\n\n    wave /= 200.0 / length\n\n    length_section = length / (len(branch) - 1)\n    ypos = 0\n\n    for i, ypos_rand in enumerate(sorted(ypos_random)):\n\n        random.seed(seed + 60 + i)\n        if random.choice(\[True, False]):\n            wave *= -1\n\n        ypos += length_section\n\n        mix_ypos = (ypos_rand - ypos) * separation_random + ypos\n\n        branch\[i + 1].center.setPosition((wave, mix_ypos, 0))\n\n    # wavy\n    min_wavy = this.knob('min_wavy').value()\n    max_wavy = this.knob('max_wavy').value()\n\n    random.seed(seed + 70)\n    wavy = random.uniform(min_wavy, max_wavy) * 2\n\n    random.seed(left_seed)\n    left_direction = random.choice(\[True, False])\n\n    if left_direction:\n        wavy *= -1\n\n    exp = 2\n\n    for i, p in enumerate(branch):\n        if i == 0:\n            continue\n\n        point = p.center.getPosition(0)\n        _wavy = wavy * exp\n\n        rotated = rotate_point((0, 0, 0), point, _wavy)\n        p.center.setPosition(rotated)\n\n        exp *= 2\n\n\ndef angle_two_points(p1, p2):\n    delta_x = p1\[0] - p2\[0]\n    delta_y = p1\[1] - p2\[1]\n\n    return math.atan2(delta_x, delta_y) * 180 / math.pi\n\n\ndef rotate_point(center, point, angle):\n\n    angle = -angle * math.pi / 180\n\n    cx = center\[0]\n    cy = center\[1]\n\n    px = point\[0]\n    py = point\[1]\n\n    s = math.sin(angle)\n    c = math.cos(angle)\n\n    px -= cx\n    py -= cy\n\n    xnew = px * c - py * s\n    ynew = px * s + py * c\n\n    px = xnew + cx\n    py = ynew + cy\n\n    return (px, py, 0)\n\n\ndef cubic_bezier(p1, p2, p3, p4, value):\n    L1 = ((1 - value) * p1) + (value * p2)\n    L2 = ((1 - value) * p2) + (value * p3)\n    L3 = ((1 - value) * p3) + (value * p4)\n\n    Q1 = ((1 - value) * L1) + (L2 * value)\n    Q2 = ((1 - value) * L2) + (L3 * value)\n\n    return ((1 - value) * Q1) + (Q2 * value)\n\n\ndef curves():\n    splines = nuke.toNode('splines')\n    return splines\['curves']\n\n\ndef root_layers():\n    return curves().rootLayer\n\nbake()"}
+ addUserKnob {22 clean_bake l "Clean Bake" -STARTLINE T "# Author: Francisco Jose Contreras Cuevas\n# Office: VFX Artist - Senior Compositor\n# Website: vinavfx.com\nimport nuke\nimport nuke.rotopaint as rp\nimport math\nimport random\n\n\ndef create_branches():\n    root_branch = get_root_branch()\n    this = nuke.thisNode()\n\n    if not root_branch:\n        return\n\n    root_layers().removeAll()\n\n    branches = int(this.knob('branches').value())\n    sub_branches = int(this.knob('sub_branches').value())\n    seed = int(this.knob('seed').value())\n\n    root_branches = get_root_branches()\n\n    total = (branches + sub_branches) * len(root_branches)\n    section = 100.0 / total\n    percent = 0\n\n    for root_branch in root_branches:\n\n        progress = nuke.ProgressTask('Creating Branches')\n\n        for i in range(branches):\n            progress.setMessage('Creating branch: \{0\} ...'.format(i))\n            progress.setProgress(int(percent))\n            percent += section\n\n            if progress.isCancelled():\n                break\n\n            name = 'main_branch_\{0\}_root_\{1\}'.format(i, root_branch.name)\n            add_spline(name, seed + i + 100)\n\n        for i in range(sub_branches):\n            progress.setMessage('Creating branch: \{0\} ...'.format(i))\n            progress.setProgress(int(percent))\n            percent += section\n\n            if progress.isCancelled():\n                break\n\n            name = 'sub_branch_\{0\}_root_\{1\}'.format(i, root_branch.name)\n            add_spline(name, seed + i + 200, True)\n\n    del progress\n\n    refresh()\n\n\ndef add_spline(name, seed, sub_branch=False):\n    this = nuke.thisNode()\n\n    samples = nuke.toNode('spline_samples')\n    curves = samples\['curves']\n\n    div = this.knob('branches_divitions').value().replace(' Divitions', '')\n    if div == 'Random':\n        divs = \[4, 5, 6, 7]\n        random.seed(seed)\n        div = random.choice(divs)\n\n    if sub_branch:\n        min_width = int(this.knob('min_sub_branch_width').value())\n        max_width = int(this.knob('max_sub_branch_width').value())\n    else:\n        min_width = int(this.knob('min_branch_width').value())\n        max_width = int(this.knob('max_branch_width').value())\n\n    if min_width >= max_width:\n        width = min_width\n    else:\n        widths = \['05', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']\n        widths = widths\[min_width - 1:max_width]\n        random.seed(seed + 10)\n        width = random.choice(widths)\n\n    layer = curves.toElement('div_\{0\}_width_\{1\}'.format(div, width))\n\n    spline = layer.clone()\n    if name:\n        spline.name = name\n\n    root_layers().append(spline)\n\n    spline.locked = False\n\n    attr = spline.getAttributes()\n\n    if sub_branch:\n        attr.set('r', 0)\n        attr.set('g', 1)\n        attr.set('b', 0)\n    else:\n        attr.set('r', 1)\n        attr.set('g', 0)\n        attr.set('b', 0)\n\n    return spline\n\n\ndef get_branches(sub_branch=False):\n    branches = \{\}\n\n    roto = nuke.thisNode().input(0)\n\n    if not roto:\n        return \{\}\n    if not roto.Class() == 'Roto':\n        return \{\}\n\n    curves = roto\['curves']\n\n    prefix = 'sub_branch' if sub_branch else 'main_branch'\n\n    for l in root_layers():\n        if prefix in l.name:\n\n            root_name = l.name.split('root_')\[-1]\n\n            if not root_name in branches:\n                branches\[root_name] = \{\n                    'root': curves.toElement(root_name),\n                    'branches': \[]\n                \}\n\n            branches\[root_name]\['branches'].append(l)\n\n    return branches\n\n\ndef get_root_branch():\n\n    roto = nuke.thisNode().input(0)\n\n    if not roto:\n        nuke.message(\"Must connect a 'Roto' node !\")\n        return\n\n    if not roto.Class() == 'Roto':\n        nuke.message(\"Must connect a 'Roto' node !\")\n        return\n\n    root_layer = roto\['curves'].rootLayer\n\n    return root_layer\[0]\n\n\ndef get_root_branches():\n\n    roto = nuke.thisNode().input(0)\n\n    if not roto:\n        nuke.message(\"Must connect a 'Roto' node !\")\n        return \[]\n\n    if not roto.Class() == 'Roto':\n        nuke.message(\"Must connect a 'Roto' node !\")\n        return \[]\n\n    root_layer = roto\['curves'].rootLayer\n\n    return root_layer\n\n\nbranches = \{\}\nsub_branches = \{\}\n\n\ndef refresh(frame=nuke.frame(), animation=False):\n\n    global branches, sub_branches\n    branches = get_branches()\n    sub_branches = get_branches(True)\n\n    seed = int(nuke.thisNode().knob('seed').value())\n\n    for i, key in enumerate(branches):\n        root_branch = branches\[key]\['root']\n\n        refresh_branches(root_branch, frame, animation, seed + i)\n        wave_smooth(root_branch, frame, branches, seed + i)\n\n    curves().changed()\n\n    for i, key in enumerate(sub_branches):\n        root_branch = sub_branches\[key]\['root']\n\n        refresh_sub_branches(root_branch, frame, animation, seed + 10 + i)\n        wave_smooth(root_branch, frame, sub_branches, seed + 10 + i)\n\n    curves().changed()\n\n\ndef refresh_branches(root_spline, frame, animation, seed):\n\n    _branches = branches\[root_spline.name]\['branches']\n\n    for i, branch in enumerate(_branches):\n        seed += i\n\n        random.seed(seed + 1)\n        section = random.randrange(0, len(root_spline) - 1)\n\n        random.seed(seed + 5)\n        slide_position = random.random()\n\n        left_seed = seed + 15\n\n        transform_branch(root_spline, branch, section,\n                         slide_position, frame, seed + 7, left_seed, animation)\n\n        branch_shape(branch, seed + 10, left_seed)\n\n\ndef refresh_sub_branches(root_branch, frame, animation, seed):\n\n    _sub_branches = sub_branches\[root_branch.name]\['branches']\n    _branches = branches\[root_branch.name]\['branches']\n\n    for i, branch in enumerate(_sub_branches):\n        random.seed(seed + 1)\n        root_spline = random.choice(_branches)\n\n        seed += i\n\n        random.seed(seed + 4)\n        section = random.randrange(0, len(root_spline) - 1)\n\n        random.seed(seed + 7)\n        slide_position = random.random()\n\n        left_seed = seed + 15\n\n        transform_branch(root_spline, branch, section,\n                         slide_position, frame, seed + 7, left_seed, animation)\n\n        branch_shape(branch, seed + 10, left_seed)\n\n\ndef bake():\n    # Probar render dialog para bake !!!\n    #  nukescripts.renderdialog._gRenderDialogState.saveValue('frame_range', 'custom')\n    #  nukescripts.renderdialog.showRenderDialog(nuke.selectedNodes())\n    clean_bake()\n\n    this = nuke.thisNode()\n    first = int(this.knob('first').value())\n    last = int(this.knob('last').value())\n    each = int(this.knob('each_frame').value())\n\n    progress = nuke.ProgressTask('Branches Baking')\n\n    _range = list( range(first, last, each) )\n    _range.append(last)\n\n    section = 100.0 / len(_range)\n    percent = 0\n\n    for frame in _range:\n        progress.setMessage('Baking frame: \{0\} ...'.format(frame))\n        progress.setProgress(int(percent))\n        percent += section\n\n        if progress.isCancelled():\n            break\n\n        refresh(frame, True)\n\n    del progress\n\n\ndef clean_bake():\n    def clean(branch):\n        tm = branch.getTransform()\n\n        tm.getTranslationAnimCurve(0).removeAllKeys()\n        tm.getTranslationAnimCurve(1).removeAllKeys()\n        tm.getRotationAnimCurve(2).removeAllKeys()\n\n    for _, item in get_branches().items():\n        for branch in item\['branches']:\n            clean(branch)\n\n    for _, item in get_branches(True).items():\n        for branch in item\['branches']:\n            clean(branch)\n\n    curves().changed()\n\n\ndef transform_branch(root_spline, branch, section, slide_position, frame, seed, left_seed, animation=False):\n    this = nuke.thisNode()\n\n    x, y, _ = bezier_by_section(root_spline, section, slide_position, frame)\n\n    # Translate\n    root_transform = root_spline.getTransform()\n\n    root_x = root_transform.getTranslationAnimCurve(0).evaluate(frame)\n    root_y = root_transform.getTranslationAnimCurve(1).evaluate(frame)\n    parent_rotate = root_transform.getRotationAnimCurve(2).evaluate(frame)\n\n    x += root_x\n    y += root_y\n\n    x, y, _ = rotate_point((root_x, root_y), (x, y), -parent_rotate)\n\n    # Angle\n    if 'sub_branch' in branch.name:\n        min_angle = int(this.knob('min_sub_branch_angle').value())\n        max_angle = int(this.knob('max_sub_branch_angle').value())\n\n    else:\n        min_angle = int(this.knob('min_branch_angle').value())\n        max_angle = int(this.knob('max_branch_angle').value())\n\n    p1 = bezier_by_section(root_spline, section, slide_position + .01, frame)\n    p2 = bezier_by_section(root_spline, section, slide_position - .01, frame)\n\n    root_angle = angle_two_points(p1, p2)\n\n    random.seed(left_seed)\n    left_angle = random.choice(\[True, False])\n\n    random.seed(seed + 20)\n    angle = random.randrange(min_angle, max_angle)\n\n    if left_angle:\n        angle *= -1\n\n    angle = angle - root_angle + parent_rotate\n\n    tm = branch.getTransform()\n\n    if animation:\n        tm.getRotationAnimCurve(2).addKey(frame, angle)\n        tm.getTranslationAnimCurve(0).addKey(frame, x)\n        tm.getTranslationAnimCurve(1).addKey(frame, y)\n    else:\n        tm.getRotationAnimCurve(2).constantValue = angle\n        tm.getTranslationAnimCurve(0).constantValue = x\n        tm.getTranslationAnimCurve(1).constantValue = y\n\n    tm.getPivotPointAnimCurve(0).constantValue = 0\n    tm.getPivotPointAnimCurve(1).constantValue = 0\n\n\ndef bezier_by_section(root_spline, section, slide_position, frame):\n    p1 = root_spline\[section].center.getPosition(frame)\n    p2 = root_spline\[section].rightTangent.getPosition(frame) + p1\n    p4 = root_spline\[section + 1].center.getPosition(frame)\n    p3 = root_spline\[section + 1].leftTangent.getPosition(frame) + p4\n\n    bezier = cubic_bezier(p1, p2, p3, p4, slide_position)\n\n    return bezier\n\n\ndef wave_smooth(root_branch, frame, branches, seed):\n\n    smooth = nuke.thisNode().knob('wave_smooth').value()\n    break_branch = nuke.thisNode().knob('break').value()\n    break_width = nuke.thisNode().knob('break_width').value()\n\n    if smooth == 1:\n        smooth -= 0.0001\n\n    _branches = branches\[root_branch.name]\['branches']\n\n    for b, branch in enumerate(_branches):\n        last_point_index = len(branch) - 1\n\n        for i, p in enumerate(branch):\n            if i == 0 or i == last_point_index:\n                p.rightTangent.setPosition((0, 0, 0))\n                p.leftTangent.setPosition((0, 0, 0))\n                continue\n\n            back_center = branch\[i - 1].center.getPosition(frame)\n            fore_center = branch\[i + 1].center.getPosition(frame)\n            center = p.center.getPosition(frame)\n\n            right = p.rightTangent\n            left = p.leftTangent\n\n            angle = angle_two_points(back_center, fore_center)\n\n            # Left\n            llength = math.hypot(\n                back_center\[0] - center\[0], back_center\[1] - center\[1])\n\n            if not i == 1:\n                llength /= 2\n\n            llength *= smooth\n\n            random.seed(seed + 3 + b)\n            break_angle = break_branch * random.choice(\[90, -90])\n            llength *= break_width\n\n            lpos = rotate_point(\n                center, (center\[0], center\[1] + llength), angle + break_angle)\n\n            left_pos = (lpos\[0] - center\[0], lpos\[1] - center\[1], 0)\n\n            left.setPosition(left_pos)\n\n            # Right\n            rlength = math.hypot(\n                fore_center\[0] - center\[0], fore_center\[1] - center\[1])\n\n            if not i == last_point_index - 1:\n                rlength /= 2\n\n            rlength *= smooth\n\n            rpos = rotate_point(\n                center, (center\[0], center\[1] + rlength), angle - 180)\n            right_pos = (rpos\[0] - center\[0], rpos\[1] - center\[1], 0)\n\n            right.setPosition(right_pos)\n\n\ndef branch_shape(branch, seed, left_seed):\n\n    this = nuke.thisNode()\n\n    if 'sub_branch' in branch.name:\n        min_length = int(this.knob('min_sub_branch_length').value())\n        max_length = int(this.knob('max_sub_branch_length').value())\n    else:\n        min_length = int(this.knob('min_branch_length').value())\n        max_length = int(this.knob('max_branch_length').value())\n\n    random.seed(seed + 30)\n    length = random.randrange(min_length, max_length)\n\n    branch\[0].center.setPosition((0, 0, 0))\n\n    last_point = branch\[-1]\n    last_point.center.setPosition((0, length, 0))\n\n    # Inside points\n    separation_random = this.knob('separation_random').value()\n\n    inside_point_count = len(branch) - 2\n\n    random.seed(seed + 40)\n    ypos_random = random.sample(range(1, length - 1), inside_point_count)\n\n    min_wave = int(this.knob('min_wave').value())\n    max_wave = int(this.knob('max_wave').value())\n\n    random.seed(seed + 50)\n    wave = random.randrange(min_wave, max_wave)\n\n    wave /= 200.0 / length\n\n    length_section = length / (len(branch) - 1)\n    ypos = 0\n\n    for i, ypos_rand in enumerate(sorted(ypos_random)):\n\n        random.seed(seed + 60 + i)\n        if random.choice(\[True, False]):\n            wave *= -1\n\n        ypos += length_section\n\n        mix_ypos = (ypos_rand - ypos) * separation_random + ypos\n\n        branch\[i + 1].center.setPosition((wave, mix_ypos, 0))\n\n    # wavy\n    min_wavy = this.knob('min_wavy').value()\n    max_wavy = this.knob('max_wavy').value()\n\n    random.seed(seed + 70)\n    wavy = random.uniform(min_wavy, max_wavy) * 2\n\n    random.seed(left_seed)\n    left_direction = random.choice(\[True, False])\n\n    if left_direction:\n        wavy *= -1\n\n    exp = 2\n\n    for i, p in enumerate(branch):\n        if i == 0:\n            continue\n\n        point = p.center.getPosition(0)\n        _wavy = wavy * exp\n\n        rotated = rotate_point((0, 0, 0), point, _wavy)\n        p.center.setPosition(rotated)\n\n        exp *= 2\n\n\ndef angle_two_points(p1, p2):\n    delta_x = p1\[0] - p2\[0]\n    delta_y = p1\[1] - p2\[1]\n\n    return math.atan2(delta_x, delta_y) * 180 / math.pi\n\n\ndef rotate_point(center, point, angle):\n\n    angle = -angle * math.pi / 180\n\n    cx = center\[0]\n    cy = center\[1]\n\n    px = point\[0]\n    py = point\[1]\n\n    s = math.sin(angle)\n    c = math.cos(angle)\n\n    px -= cx\n    py -= cy\n\n    xnew = px * c - py * s\n    ynew = px * s + py * c\n\n    px = xnew + cx\n    py = ynew + cy\n\n    return (px, py, 0)\n\n\ndef cubic_bezier(p1, p2, p3, p4, value):\n    L1 = ((1 - value) * p1) + (value * p2)\n    L2 = ((1 - value) * p2) + (value * p3)\n    L3 = ((1 - value) * p3) + (value * p4)\n\n    Q1 = ((1 - value) * L1) + (L2 * value)\n    Q2 = ((1 - value) * L2) + (L3 * value)\n\n    return ((1 - value) * Q1) + (Q2 * value)\n\n\ndef curves():\n    splines = nuke.toNode('splines')\n    return splines\['curves']\n\n\ndef root_layers():\n    return curves().rootLayer\n\nclean_bake()"}
+ addUserKnob {20 about l About}
+ addUserKnob {26 _name l "" +STARTLINE T "<b>vSplineBranch</b> v1.0<br><br><b>Francisco Contreras</b> - Senior Compositor<br><a href=\"http://vinavfx.com\"><span style=\"color:#C8C8C8;\">vinavfx.com</span></a>"}
+ addUserKnob {26 ""}
+}
+ Roto {
+  inputs 0
+  cliptype none
+  curves {{{v x3f99999a}
+  {f 0}
+  {n
+   {layer Root
+    {f 2097664}
+    {t x44800000 x44428000}
+    {a pt1x 0 pt1y 0 pt2x 0 pt2y 0 pt3x 0 pt3y 0 pt4x 0 pt4y 0 ptex00 0 ptex01 0 ptex02 0 ptex03 0 ptex10 0 ptex11 0 ptex12 0 ptex13 0 ptex20 0 ptex21 0 ptex22 0 ptex23 0 ptex30 0 ptex31 0 ptex32 0 ptex33 0 ptof1x 0 ptof1y 0 ptof2x 0 ptof2y 0 ptof3x 0 ptof3y 0 ptof4x 0 ptof4y 0 pterr 0 ptrefset 0 ptmot x40800000 ptref 0}}}}}
+  toolbox {selectAll {
+  { selectAll str 1 ssx 1 ssy 1 sf 1 }
+  { selectCurves str 1 ssx 1 ssy 1 sf 1 }
+  { createBezier str 1 ssx 1 ssy 1 sf 1 sb 1 tt 4 }
+  { createBezierCusped str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { createBSpline str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { createEllipse str 1 ssx 1 ssy 1 sf 1 sb 1 tt 7 }
+  { createRectangle str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { createRectangleCusped str 1 ssx 1 ssy 1 sf 1 sb 1 tt 9 }
+  { createOpenSpline str 1 ssx 1 ssy 1 sf 1 tt 10 }
+  { brush str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { eraser src 2 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { clone src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { reveal src 3 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { dodge src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { burn src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { blur src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { sharpen src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { smear src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+} }
+  toolbar_label_points true
+  toolbar_brush_hardness 0.200000003
+  toolbar_openspline_width 2
+  toolbar_source_transform_scale {1 1}
+  toolbar_source_transform_center {320 240}
+  color {1 0 0 1}
+  colorOverlay {0 0 0 0}
+  lifetime_type "all frames"
+  lifetime_start 50
+  lifetime_end 50
+  view {}
+  motionblur_on true
+  motionblur_shutter_offset_type centred
+  openspline_width 2
+  name splines
+  xpos 14
+  ypos 103
+  addUserKnob {20 button +HIDDEN +INVISIBLE}
+  addUserKnob {22 createPowerRelative -STARTLINE T "import aePowerPinFun\naePowerPinFun.createPowerRelative()"}
+  addUserKnob {22 createPowerAbsolute -STARTLINE T "import aePowerPinFun\naePowerPinFun.createPowerAbsolute()"}
+  addUserKnob {22 createPowerStabilize -STARTLINE T "import aePowerPinFun\naePowerPinFun.createPowerStabilize()"}
+ }
+ Input {
+  inputs 0
+  name OpenSpline
+  selected true
+  xpos -153
+  ypos 117
+ }
+ Shuffle {
+  in alpha
+  red black
+  green black
+  alpha blue
+  name Shuffle1
+  xpos -153
+  ypos 202
+ }
+ Merge2 {
+  inputs 2
+  name Merge1
+  xpos 14
+  ypos 202
+ }
+ Output {
+  name Output1
+  xpos 14
+  ypos 295
+ }
+ Roto {
+  inputs 0
+  output alpha
+  curves {{{v x3f99999a}
+  {f 0}
+  {n
+   {layer Root
+    {f 2097664}
+    {t x44800000 x44428000}
+    {a pt1x 0 pt1y 0 pt2x 0 pt2y 0 pt3x 0 pt3y 0 pt4x 0 pt4y 0 ptex00 0 ptex01 0 ptex02 0 ptex03 0 ptex10 0 ptex11 0 ptex12 0 ptex13 0 ptex20 0 ptex21 0 ptex22 0 ptex23 0 ptex30 0 ptex31 0 ptex32 0 ptex33 0 ptof1x 0 ptof1y 0 ptof2x 0 ptof2y 0 ptof3x 0 ptof3y 0 ptof4x 0 ptof4y 0 pterr 0 ptrefset 0 ptmot x40800000 ptref 0}
+    {curvegroup div_5_width_05 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x448131fa x447c0000}
+        {}
+        {}
+        {{a osw x3f400004 osf 0}	x448131fa x44830000}
+        {}
+        {}
+        {{a osw x3f0a3d79 osf 0}	x448131fa x44880000}
+        {}
+        {}
+        {{a osw x3eb3333e osf 0}	x448131fa x448e0000}
+        {}
+        {}
+        {{a osw 0 osf 0}	x448131fa x449308a8}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x432b3333 x448ba666}
+     {a osbe 0 osee 0 osw x3f000000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_6_width_05 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x448131fa x44433998}
+        {}
+        {}
+        {{a osw x3f59999c osf 0}	x448131fa x444b7998}
+        {}
+        {}
+        {{a osw x3f2b851e osf 0}	x448131fa x4453f998}
+        {}
+        {}
+        {{a osw x3f0147ad osf 0}	x448131fa x445bf998}
+        {}
+        {}
+        {{a osw x3e91eb8b osf 0}	x448131fa x44647998}
+        {}
+        {}
+        {{a osw 0 osf 0}	x448131fa x446eb998}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43160000 x44619555}
+     {a osbe 0 osee 0 osw x3f000000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_7_width_05 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x448121d3 x4403f998}
+        {}
+        {}
+        {{a osw x3f533132 osf 0}	x448121d3 x440c3998}
+        {}
+        {}
+        {{a osw x3f465e8a osf 0}	x44811f27 x4414e6c4}
+        {}
+        {}
+        {{a osw x3f200003 osf 0}	x44811c7a x441dcc6a}
+        {}
+        {}
+        {{a osw x3ecf5c45 osf 0}	x44811f27 x4427502e}
+        {}
+        {}
+        {{a osw x3e666633 osf 0}	x448121d3 x44303998}
+        {}
+        {}
+        {{a osw 0 osf 0}	x448121d3 x4435f998}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43286db7 x443276db}
+     {a osbe 0 osee 0 osw x3f000000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_8_width_05 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x448131fa x43927330}
+        {}
+        {}
+        {{a osw x3f4f5c29 osf 0}	x448131fa x439ef330}
+        {}
+        {}
+        {{a osw x3f3c28f7 osf 0}	x448131fa x43ab7330}
+        {}
+        {}
+        {{a osw x3f15c293 osf 0}	x448131fa x43b7f333}
+        {}
+        {}
+        {{a osw x3f028f61 osf 0}	x448131fa x43c5f333}
+        {}
+        {}
+        {{a osw x3ea66675 osf 0}	x448131fa x43d4f333}
+        {}
+        {}
+        {{a osw x3e70a3ae osf 0}	x448131fa x43e1f333}
+        {}
+        {}
+        {{a osw 0 osf 0}	x448131fa x43ef7331}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x4304e000 x43d2b000}
+     {a osbe 0 osee 0 osw x3f000000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_5_width_5 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x44162a5a x44807001}
+        {}
+        {}
+        {{a osw x3f400004 osf 0}	x44162a5a x44857001}
+        {}
+        {}
+        {{a osw x3f0a3d79 osf 0}	x44162a5a x448a7001}
+        {}
+        {}
+        {{a osw x3eb3333e osf 0}	x44162a5a x44907001}
+        {}
+        {}
+        {{a osw 0 osf 0}	x44162a5a x449578a8}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x432b3333 x448ba666}
+     {a osbe 0 osee 0 osw x40a00000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_6_width_5 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x44162a5a x44481998}
+        {}
+        {}
+        {{a osw x3f59999c osf 0}	x44162a5a x44505998}
+        {}
+        {}
+        {{a osw x3f2b851e osf 0}	x44162a5a x4458d998}
+        {}
+        {}
+        {{a osw x3f0147ad osf 0}	x44162a5a x4460d998}
+        {}
+        {}
+        {{a osw x3e91eb8b osf 0}	x44162a5a x44695998}
+        {}
+        {}
+        {{a osw 0 osf 0}	x44162a5a x44739998}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43160000 x44619555}
+     {a osbe 0 osee 0 osw x40a00000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_7_width_5 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x44160a0d x4408d998}
+        {}
+        {}
+        {{a osw x3f533132 osf 0}	x44160a0d x44111998}
+        {}
+        {}
+        {{a osw x3f465e8a osf 0}	x441604b5 x4419c6c5}
+        {}
+        {}
+        {{a osw x3f200003 osf 0}	x4415ff5c x4422ac6b}
+        {}
+        {}
+        {{a osw x3ecf5c45 osf 0}	x441604b5 x442c302f}
+        {}
+        {}
+        {{a osw x3e666633 osf 0}	x44160a0d x44351998}
+        {}
+        {}
+        {{a osw 0 osf 0}	x44160a0d x443ad998}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43286db7 x443276db}
+     {a osbe 0 osee 0 osw x40a00000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_8_width_5 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x44162a5a x439c332f}
+        {}
+        {}
+        {{a osw x3f4f5c29 osf 0}	x44162a5a x43a8b32f}
+        {}
+        {}
+        {{a osw x3f3c28f7 osf 0}	x44162a5a x43b5332f}
+        {}
+        {}
+        {{a osw x3f15c293 osf 0}	x44162a5a x43c1b331}
+        {}
+        {}
+        {{a osw x3f028f61 osf 0}	x44162a5a x43cfb331}
+        {}
+        {}
+        {{a osw x3ea66675 osf 0}	x44162a5a x43deb331}
+        {}
+        {}
+        {{a osw x3e70a3ae osf 0}	x44162a5a x43ebb331}
+        {}
+        {}
+        {{a osw 0 osf 0}	x44162a5a x43f9332e}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x4304e000 x43d2b000}
+     {a osbe 0 osee 0 osw x40a00000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_8_width_4 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x442e50bf x439a1995}
+        {}
+        {}
+        {{a osw x3f4f5c29 osf 0}	x442e50bf x43a69995}
+        {}
+        {}
+        {{a osw x3f3c28f7 osf 0}	x442e50bf x43b31995}
+        {}
+        {}
+        {{a osw x3f15c293 osf 0}	x442e50bf x43bf9997}
+        {}
+        {}
+        {{a osw x3f028f61 osf 0}	x442e50bf x43cd9997}
+        {}
+        {}
+        {{a osw x3ea66675 osf 0}	x442e50bf x43dc9997}
+        {}
+        {}
+        {{a osw x3e70a3ae osf 0}	x442e50bf x43e99997}
+        {}
+        {}
+        {{a osw 0 osf 0}	x442e50bf x43f71994}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x4304e000 x43d2b000}
+     {a osbe 0 osee 0 osw x40800000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_7_width_4 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x442e3073 x4407cccb}
+        {}
+        {}
+        {{a osw x3f533132 osf 0}	x442e3073 x44100ccb}
+        {}
+        {}
+        {{a osw x3f465e8a osf 0}	x442e2b1a x4418b9f8}
+        {}
+        {}
+        {{a osw x3f200003 osf 0}	x442e25c1 x44219f9e}
+        {}
+        {}
+        {{a osw x3ecf5c45 osf 0}	x442e2b1a x442b2362}
+        {}
+        {}
+        {{a osw x3e666633 osf 0}	x442e3073 x44340ccb}
+        {}
+        {}
+        {{a osw 0 osf 0}	x442e3073 x4439cccb}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43286db7 x443276db}
+     {a osbe 0 osee 0 osw x40800000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_6_width_4 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x442e50bf x44470ccb}
+        {}
+        {}
+        {{a osw x3f59999c osf 0}	x442e50bf x444f4ccb}
+        {}
+        {}
+        {{a osw x3f2b851e osf 0}	x442e50bf x4457cccb}
+        {}
+        {}
+        {{a osw x3f0147ad osf 0}	x442e50bf x445fcccb}
+        {}
+        {}
+        {{a osw x3e91eb8b osf 0}	x442e50bf x44684ccb}
+        {}
+        {}
+        {{a osw 0 osf 0}	x442e50bf x44728ccb}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43160000 x44619555}
+     {a osbe 0 osee 0 osw x40800000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_5_width_4 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x442e50bf x447fd333}
+        {}
+        {}
+        {{a osw x3f400004 osf 0}	x442e50bf x4484e99a}
+        {}
+        {}
+        {{a osw x3f0a3d79 osf 0}	x442e50bf x4489e99a}
+        {}
+        {}
+        {{a osw x3eb3333e osf 0}	x442e50bf x448fe99a}
+        {}
+        {}
+        {{a osw 0 osf 0}	x442e50bf x4494f242}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x432b3333 x448ba666}
+     {a osbe 0 osee 0 osw x40800000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_5_width_2 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x445803f2 x44801000}
+        {}
+        {}
+        {{a osw x3f400004 osf 0}	x445803f2 x44851000}
+        {}
+        {}
+        {{a osw x3f0a3d79 osf 0}	x445803f2 x448a1000}
+        {}
+        {}
+        {{a osw x3eb3333e osf 0}	x445803f2 x44901000}
+        {}
+        {}
+        {{a osw 0 osf 0}	x445803f2 x449518a8}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x432b3333 x448ba666}
+     {a osbe 0 osee 0 osw x40000000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_6_width_2 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x445803f2 x44475998}
+        {}
+        {}
+        {{a osw x3f59999c osf 0}	x445803f2 x444f9998}
+        {}
+        {}
+        {{a osw x3f2b851e osf 0}	x445803f2 x44581998}
+        {}
+        {}
+        {{a osw x3f0147ad osf 0}	x445803f2 x44601998}
+        {}
+        {}
+        {{a osw x3e91eb8b osf 0}	x445803f2 x44689998}
+        {}
+        {}
+        {{a osw 0 osf 0}	x445803f2 x4472d998}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43160000 x44619555}
+     {a osbe 0 osee 0 osw x40000000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_7_width_2 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x4457e3a5 x44081998}
+        {}
+        {}
+        {{a osw x3f533132 osf 0}	x4457e3a5 x44105998}
+        {}
+        {}
+        {{a osw x3f465e8a osf 0}	x4457de4d x441906c5}
+        {}
+        {}
+        {{a osw x3f200003 osf 0}	x4457d8f4 x4421ec6b}
+        {}
+        {}
+        {{a osw x3ecf5c45 osf 0}	x4457de4d x442b702f}
+        {}
+        {}
+        {{a osw x3e666633 osf 0}	x4457e3a5 x44345998}
+        {}
+        {}
+        {{a osw 0 osf 0}	x4457e3a5 x443a1998}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43286db7 x443276db}
+     {a osbe 0 osee 0 osw x40000000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_8_width_2 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x445803f2 x439ab330}
+        {}
+        {}
+        {{a osw x3f4f5c29 osf 0}	x445803f2 x43a73330}
+        {}
+        {}
+        {{a osw x3f3c28f7 osf 0}	x445803f2 x43b3b330}
+        {}
+        {}
+        {{a osw x3f15c293 osf 0}	x445803f2 x43c03332}
+        {}
+        {}
+        {{a osw x3f028f61 osf 0}	x445803f2 x43ce3332}
+        {}
+        {}
+        {{a osw x3ea66675 osf 0}	x445803f2 x43dd3332}
+        {}
+        {}
+        {{a osw x3e70a3ae osf 0}	x445803f2 x43ea3332}
+        {}
+        {}
+        {{a osw 0 osf 0}	x445803f2 x43f7b330}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x4304e000 x43d2b000}
+     {a osbe 0 osee 0 osw x40000000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_8_width_3 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x443fdd8d x439cccca}
+        {}
+        {}
+        {{a osw x3f4f5c29 osf 0}	x443fdd8d x43a94cca}
+        {}
+        {}
+        {{a osw x3f3c28f7 osf 0}	x443fdd8d x43b5ccca}
+        {}
+        {}
+        {{a osw x3f15c293 osf 0}	x443fdd8d x43c24ccc}
+        {}
+        {}
+        {{a osw x3f028f61 osf 0}	x443fdd8d x43d04ccc}
+        {}
+        {}
+        {{a osw x3ea66675 osf 0}	x443fdd8d x43df4ccc}
+        {}
+        {}
+        {{a osw x3e70a3ae osf 0}	x443fdd8d x43ec4ccc}
+        {}
+        {}
+        {{a osw 0 osf 0}	x443fdd8d x43f9ccc8}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x4304e000 x43d2b000}
+     {a osbe 0 osee 0 osw x40400000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_7_width_3 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x443fbd40 x44092665}
+        {}
+        {}
+        {{a osw x3f533132 osf 0}	x443fbd40 x44116665}
+        {}
+        {}
+        {{a osw x3f465e8a osf 0}	x443fb7e7 x441a1392}
+        {}
+        {}
+        {{a osw x3f200003 osf 0}	x443fb28f x4422f938}
+        {}
+        {}
+        {{a osw x3ecf5c45 osf 0}	x443fb7e7 x442c7cfc}
+        {}
+        {}
+        {{a osw x3e666633 osf 0}	x443fbd40 x44356665}
+        {}
+        {}
+        {{a osw 0 osf 0}	x443fbd40 x443b2665}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43286db7 x443276db}
+     {a osbe 0 osee 0 osw x40400000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_6_width_3 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x443fdd8d x44486665}
+        {}
+        {}
+        {{a osw x3f59999c osf 0}	x443fdd8d x4450a665}
+        {}
+        {}
+        {{a osw x3f2b851e osf 0}	x443fdd8d x44592665}
+        {}
+        {}
+        {{a osw x3f0147ad osf 0}	x443fdd8d x44612665}
+        {}
+        {}
+        {{a osw x3e91eb8b osf 0}	x443fdd8d x4469a665}
+        {}
+        {}
+        {{a osw 0 osf 0}	x443fdd8d x4473e665}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43160000 x44619555}
+     {a osbe 0 osee 0 osw x40400000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_5_width_3 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x443fdd8d x44809667}
+        {}
+        {}
+        {{a osw x3f400004 osf 0}	x443fdd8d x44859667}
+        {}
+        {}
+        {{a osw x3f0a3d79 osf 0}	x443fdd8d x448a9667}
+        {}
+        {}
+        {{a osw x3eb3333e osf 0}	x443fdd8d x44909667}
+        {}
+        {}
+        {{a osw 0 osf 0}	x443fdd8d x44959f0e}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x432b3333 x448ba666}
+     {a osbe 0 osee 0 osw x40400000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_8_width_1 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x4471e3f3 x43987330}
+        {}
+        {}
+        {{a osw x3f4f5c29 osf 0}	x4471e3f3 x43a4f330}
+        {}
+        {}
+        {{a osw x3f3c28f7 osf 0}	x4471e3f3 x43b17330}
+        {}
+        {}
+        {{a osw x3f15c293 osf 0}	x4471e3f3 x43bdf333}
+        {}
+        {}
+        {{a osw x3f028f61 osf 0}	x4471e3f3 x43cbf333}
+        {}
+        {}
+        {{a osw x3ea66675 osf 0}	x4471e3f3 x43daf333}
+        {}
+        {}
+        {{a osw x3e70a3ae osf 0}	x4471e3f3 x43e7f333}
+        {}
+        {}
+        {{a osw 0 osf 0}	x4471e3f3 x43f57331}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x4304e000 x43d2b000}
+     {a osbe 0 osee 0 osw 1 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_7_width_1 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x4471c3a6 x4406f999}
+        {}
+        {}
+        {{a osw x3f533132 osf 0}	x4471c3a6 x440f3999}
+        {}
+        {}
+        {{a osw x3f465e8a osf 0}	x4471be4e x4417e6c5}
+        {}
+        {}
+        {{a osw x3f200003 osf 0}	x4471b8f5 x4420cc6b}
+        {}
+        {}
+        {{a osw x3ecf5c45 osf 0}	x4471be4e x442a502f}
+        {}
+        {}
+        {{a osw x3e666633 osf 0}	x4471c3a6 x44333999}
+        {}
+        {}
+        {{a osw 0 osf 0}	x4471c3a6 x4438f999}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43286db7 x443276db}
+     {a osbe 0 osee 0 osw 1 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_6_width_1 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x4471e3f3 x44463999}
+        {}
+        {}
+        {{a osw x3f59999c osf 0}	x4471e3f3 x444e7999}
+        {}
+        {}
+        {{a osw x3f2b851e osf 0}	x4471e3f3 x4456f999}
+        {}
+        {}
+        {{a osw x3f0147ad osf 0}	x4471e3f3 x445ef999}
+        {}
+        {}
+        {{a osw x3e91eb8b osf 0}	x4471e3f3 x44677999}
+        {}
+        {}
+        {{a osw 0 osf 0}	x4471e3f3 x4471b999}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43160000 x44619555}
+     {a osbe 0 osee 0 osw 1 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_5_width_1 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x4471e3f3 x447f0001}
+        {}
+        {}
+        {{a osw x3f400004 osf 0}	x4471e3f3 x44848001}
+        {}
+        {}
+        {{a osw x3f0a3d79 osf 0}	x4471e3f3 x44898001}
+        {}
+        {}
+        {{a osw x3eb3333e osf 0}	x4471e3f3 x448f8001}
+        {}
+        {}
+        {{a osw 0 osf 0}	x4471e3f3 x449488a9}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x432b3333 x448ba666}
+     {a osbe 0 osee 0 osw 1 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_5_width_6 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x43fcc7e6 x4481b333}
+        {}
+        {}
+        {{a osw x3f400004 osf 0}	x43fcc7e6 x4486b333}
+        {}
+        {}
+        {{a osw x3f0a3d79 osf 0}	x43fcc7e6 x448bb333}
+        {}
+        {}
+        {{a osw x3eb3333e osf 0}	x43fcc7e6 x4491b333}
+        {}
+        {}
+        {{a osw 0 osf 0}	x43fcc7e6 x4496bbdb}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x432b3333 x448ba666}
+     {a osbe 0 osee 0 osw x40c00000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_6_width_6 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x43fcc7e6 x444a9ffe}
+        {}
+        {}
+        {{a osw x3f59999c osf 0}	x43fcc7e6 x4452dffe}
+        {}
+        {}
+        {{a osw x3f2b851e osf 0}	x43fcc7e6 x445b5ffe}
+        {}
+        {}
+        {{a osw x3f0147ad osf 0}	x43fcc7e6 x44635ffe}
+        {}
+        {}
+        {{a osw x3e91eb8b osf 0}	x43fcc7e6 x446bdffe}
+        {}
+        {}
+        {{a osw 0 osf 0}	x43fcc7e6 x44761ffe}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43160000 x44619555}
+     {a osbe 0 osee 0 osw x40c00000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_7_width_6 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x43fc874c x440b5ffe}
+        {}
+        {}
+        {{a osw x3f533132 osf 0}	x43fc874c x44139ffe}
+        {}
+        {}
+        {{a osw x3f465e8a osf 0}	x43fc7c9c x441c4d2a}
+        {}
+        {}
+        {{a osw x3f200003 osf 0}	x43fc71ea x442532d0}
+        {}
+        {}
+        {{a osw x3ecf5c45 osf 0}	x43fc7c9c x442eb694}
+        {}
+        {}
+        {{a osw x3e666633 osf 0}	x43fc874c x44379ffe}
+        {}
+        {}
+        {{a osw 0 osf 0}	x43fc874c x443d5ffe}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43286db7 x443276db}
+     {a osbe 0 osee 0 osw x40c00000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_8_width_6 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x43fcc7e6 x43a13ffc}
+        {}
+        {}
+        {{a osw x3f4f5c29 osf 0}	x43fcc7e6 x43adbffc}
+        {}
+        {}
+        {{a osw x3f3c28f7 osf 0}	x43fcc7e6 x43ba3ffc}
+        {}
+        {}
+        {{a osw x3f15c293 osf 0}	x43fcc7e6 x43c6bfff}
+        {}
+        {}
+        {{a osw x3f028f61 osf 0}	x43fcc7e6 x43d4bfff}
+        {}
+        {}
+        {{a osw x3ea66675 osf 0}	x43fcc7e6 x43e3bfff}
+        {}
+        {}
+        {{a osw x3e70a3ae osf 0}	x43fcc7e6 x43f0bfff}
+        {}
+        {}
+        {{a osw 0 osf 0}	x43fcc7e6 x43fe3ffd}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x4304e000 x43d2b000}
+     {a osbe 0 osee 0 osw x40c00000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_5_width_8 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x4398bb1a x4482c999}
+        {}
+        {}
+        {{a osw x3f400004 osf 0}	x4398bb1a x4487c999}
+        {}
+        {}
+        {{a osw x3f0a3d79 osf 0}	x4398bb1a x448cc999}
+        {}
+        {}
+        {{a osw x3eb3333e osf 0}	x4398bb1a x4492c999}
+        {}
+        {}
+        {{a osw 0 osf 0}	x4398bb1a x4497d240}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x432b3333 x448ba666}
+     {a osbe 0 osee 0 osw x41000000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_6_width_8 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x4398bb1a x444cccca}
+        {}
+        {}
+        {{a osw x3f59999c osf 0}	x4398bb1a x44550cca}
+        {}
+        {}
+        {{a osw x3f2b851e osf 0}	x4398bb1a x445d8cca}
+        {}
+        {}
+        {{a osw x3f0147ad osf 0}	x4398bb1a x44658cca}
+        {}
+        {}
+        {{a osw x3e91eb8b osf 0}	x4398bb1a x446e0cca}
+        {}
+        {}
+        {{a osw 0 osf 0}	x4398bb1a x44784cca}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43160000 x44619555}
+     {a osbe 0 osee 0 osw x41000000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_7_width_8 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x43987a80 x440d8cca}
+        {}
+        {}
+        {{a osw x3f533132 osf 0}	x43987a80 x4415ccca}
+        {}
+        {}
+        {{a osw x3f465e8a osf 0}	x43986fce x441e79f7}
+        {}
+        {}
+        {{a osw x3f200003 osf 0}	x4398651e x44275f9d}
+        {}
+        {}
+        {{a osw x3ecf5c45 osf 0}	x43986fce x4430e361}
+        {}
+        {}
+        {{a osw x3e666633 osf 0}	x43987a80 x4439ccca}
+        {}
+        {}
+        {{a osw 0 osf 0}	x43987a80 x443f8cca}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43286db7 x443276db}
+     {a osbe 0 osee 0 osw x41000000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_8_width_8 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x4398bb1a x43a59996}
+        {}
+        {}
+        {{a osw x3f4f5c29 osf 0}	x4398bb1a x43b21996}
+        {}
+        {}
+        {{a osw x3f3c28f7 osf 0}	x4398bb1a x43be9996}
+        {}
+        {}
+        {{a osw x3f15c293 osf 0}	x4398bb1a x43cb1998}
+        {}
+        {}
+        {{a osw x3f028f61 osf 0}	x4398bb1a x43d91998}
+        {}
+        {}
+        {{a osw x3ea66675 osf 0}	x4398bb1a x43e81998}
+        {}
+        {}
+        {{a osw x3e70a3ae osf 0}	x4398bb1a x43f51998}
+        {}
+        {}
+        {{a osw 0 osf 0}	x4398bb1a x44014cca}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x4304e000 x43d2b000}
+     {a osbe 0 osee 0 osw x41000000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_8_width_7 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x43c907e4 x43a37ffc}
+        {}
+        {}
+        {{a osw x3f4f5c29 osf 0}	x43c907e4 x43affffc}
+        {}
+        {}
+        {{a osw x3f3c28f7 osf 0}	x43c907e4 x43bc7ffc}
+        {}
+        {}
+        {{a osw x3f15c293 osf 0}	x43c907e4 x43c8fffe}
+        {}
+        {}
+        {{a osw x3f028f61 osf 0}	x43c907e4 x43d6fffe}
+        {}
+        {}
+        {{a osw x3ea66675 osf 0}	x43c907e4 x43e5fffe}
+        {}
+        {}
+        {{a osw x3e70a3ae osf 0}	x43c907e4 x43f2fffe}
+        {}
+        {}
+        {{a osw 0 osf 0}	x43c907e4 x44003ffe}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x4304e000 x43d2b000}
+     {a osbe 0 osee 0 osw x40e00000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_7_width_7 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x43c8c74a x440c7ffd}
+        {}
+        {}
+        {{a osw x3f533132 osf 0}	x43c8c74a x4414bffd}
+        {}
+        {}
+        {{a osw x3f465e8a osf 0}	x43c8bc9a x441d6d2a}
+        {}
+        {}
+        {{a osw x3f200003 osf 0}	x43c8b1e8 x442652d0}
+        {}
+        {}
+        {{a osw x3ecf5c45 osf 0}	x43c8bc9a x442fd694}
+        {}
+        {}
+        {{a osw x3e666633 osf 0}	x43c8c74a x4438bffd}
+        {}
+        {}
+        {{a osw 0 osf 0}	x43c8c74a x443e7ffd}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43286db7 x443276db}
+     {a osbe 0 osee 0 osw x40e00000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_6_width_7 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x43c907e4 x444bbffd}
+        {}
+        {}
+        {{a osw x3f59999c osf 0}	x43c907e4 x4453fffd}
+        {}
+        {}
+        {{a osw x3f2b851e osf 0}	x43c907e4 x445c7ffd}
+        {}
+        {}
+        {{a osw x3f0147ad osf 0}	x43c907e4 x44647ffd}
+        {}
+        {}
+        {{a osw x3e91eb8b osf 0}	x43c907e4 x446cfffd}
+        {}
+        {}
+        {{a osw 0 osf 0}	x43c907e4 x44773ffd}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43160000 x44619555}
+     {a osbe 0 osee 0 osw x40e00000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_5_width_7 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x43c907e4 x44824332}
+        {}
+        {}
+        {{a osw x3f400004 osf 0}	x43c907e4 x44874332}
+        {}
+        {}
+        {{a osw x3f0a3d79 osf 0}	x43c907e4 x448c4332}
+        {}
+        {}
+        {{a osw x3eb3333e osf 0}	x43c907e4 x44924332}
+        {}
+        {}
+        {{a osw 0 osf 0}	x43c907e4 x44974bda}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x432b3333 x448ba666}
+     {a osbe 0 osee 0 osw x40e00000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_5_width_9 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x436b42fe x44821ccc}
+        {}
+        {}
+        {{a osw x3f400004 osf 0}	x436b42fe x44871ccc}
+        {}
+        {}
+        {{a osw x3f0a3d79 osf 0}	x436b42fe x448c1ccc}
+        {}
+        {}
+        {{a osw x3eb3333e osf 0}	x436b42fe x44921ccc}
+        {}
+        {}
+        {{a osw 0 osf 0}	x436b42fe x44972574}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x432b3333 x448ba666}
+     {a osbe 0 osee 0 osw x41100000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_6_width_9 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x436b42fe x444b7330}
+        {}
+        {}
+        {{a osw x3f59999c osf 0}	x436b42fe x4453b330}
+        {}
+        {}
+        {{a osw x3f2b851e osf 0}	x436b42fe x445c3330}
+        {}
+        {}
+        {{a osw x3f0147ad osf 0}	x436b42fe x44643330}
+        {}
+        {}
+        {{a osw x3e91eb8b osf 0}	x436b42fe x446cb330}
+        {}
+        {}
+        {{a osw 0 osf 0}	x436b42fe x4476f330}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43160000 x44619555}
+     {a osbe 0 osee 0 osw x41100000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_7_width_9 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x436ac1ca x440c3330}
+        {}
+        {}
+        {{a osw x3f533132 osf 0}	x436ac1ca x44147330}
+        {}
+        {}
+        {{a osw x3f465e8a osf 0}	x436aac68 x441d205d}
+        {}
+        {}
+        {{a osw x3f200003 osf 0}	x436a9706 x44260603}
+        {}
+        {}
+        {{a osw x3ecf5c45 osf 0}	x436aac68 x442f89c7}
+        {}
+        {}
+        {{a osw x3e666633 osf 0}	x436ac1ca x44387330}
+        {}
+        {}
+        {{a osw 0 osf 0}	x436ac1ca x443e3330}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43286db7 x443276db}
+     {a osbe 0 osee 0 osw x41100000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_8_width_9 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x436b42fe x43a2e661}
+        {}
+        {}
+        {{a osw x3f4f5c29 osf 0}	x436b42fe x43af6661}
+        {}
+        {}
+        {{a osw x3f3c28f7 osf 0}	x436b42fe x43bbe661}
+        {}
+        {}
+        {{a osw x3f15c293 osf 0}	x436b42fe x43c86663}
+        {}
+        {}
+        {{a osw x3f028f61 osf 0}	x436b42fe x43d66663}
+        {}
+        {}
+        {{a osw x3ea66675 osf 0}	x436b42fe x43e56663}
+        {}
+        {}
+        {{a osw x3e70a3ae osf 0}	x436b42fe x43f26663}
+        {}
+        {}
+        {{a osw 0 osf 0}	x436b42fe x43ffe660}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x4304e000 x43d2b000}
+     {a osbe 0 osee 0 osw x41100000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_8_width_10 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x430aa968 x43a4fffb}
+        {}
+        {}
+        {{a osw x3f4f5c29 osf 0}	x430aa968 x43b17ffb}
+        {}
+        {}
+        {{a osw x3f3c28f7 osf 0}	x430aa968 x43bdfffb}
+        {}
+        {}
+        {{a osw x3f15c293 osf 0}	x430aa968 x43ca7ffd}
+        {}
+        {}
+        {{a osw x3f028f61 osf 0}	x430aa968 x43d87ffd}
+        {}
+        {}
+        {{a osw x3ea66675 osf 0}	x430aa968 x43e77ffd}
+        {}
+        {}
+        {{a osw x3e70a3ae osf 0}	x430aa968 x43f47ffd}
+        {}
+        {}
+        {{a osw 0 osf 0}	x430aa968 x4400fffd}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x4304e000 x43d2b000}
+     {a osbe 0 osee 0 osw x41200000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_7_width_10 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x430a2834 x440d3ffd}
+        {}
+        {}
+        {{a osw x3f533132 osf 0}	x430a2834 x44157ffd}
+        {}
+        {}
+        {{a osw x3f465e8a osf 0}	x430a12d2 x441e2d2a}
+        {}
+        {}
+        {{a osw x3f200003 osf 0}	x4309fd70 x442712d0}
+        {}
+        {}
+        {{a osw x3ecf5c45 osf 0}	x430a12d2 x44309694}
+        {}
+        {}
+        {{a osw x3e666633 osf 0}	x430a2834 x44397ffd}
+        {}
+        {}
+        {{a osw 0 osf 0}	x430a2834 x443f3ffd}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43286db7 x443276db}
+     {a osbe 0 osee 0 osw x41200000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_6_width_10 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x430aa968 x444c7ffd}
+        {}
+        {}
+        {{a osw x3f59999c osf 0}	x430aa968 x4454bffd}
+        {}
+        {}
+        {{a osw x3f2b851e osf 0}	x430aa968 x445d3ffd}
+        {}
+        {}
+        {{a osw x3f0147ad osf 0}	x430aa968 x44653ffd}
+        {}
+        {}
+        {{a osw x3e91eb8b osf 0}	x430aa968 x446dbffd}
+        {}
+        {}
+        {{a osw 0 osf 0}	x430aa968 x4477fffd}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43160000 x44619555}
+     {a osbe 0 osee 0 osw x41200000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_5_width_10 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x430aa968 x4482a333}
+        {}
+        {}
+        {{a osw x3f400004 osf 0}	x430aa968 x4487a333}
+        {}
+        {}
+        {{a osw x3f0a3d79 osf 0}	x430aa968 x448ca333}
+        {}
+        {}
+        {{a osw x3eb3333e osf 0}	x430aa968 x4492a333}
+        {}
+        {}
+        {{a osw 0 osf 0}	x430aa968 x4497abda}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x432b3333 x448ba666}
+     {a osbe 0 osee 0 osw x41200000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_4_width_05 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x44712db7 x449e7747}
+        {}
+        {}
+        {{a osw x3f400005 osf 0}	x44712bd1 x44a5cb61}
+        {}
+        {}
+        {{a osw x3eccccd2 osf 0}	x44712d4a x44ae7b60}
+        {}
+        {}
+        {{a osw 0 osf 0}	x4471317c x44b824fa}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43704000 x44a1f000}
+     {a osbe 0 osee 0 osw x3f000000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_4_width_5 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x440dbb02 x449f40d6}
+        {}
+        {}
+        {{a osw x3f400005 osf 0}	x440db91c x44a694f0}
+        {}
+        {}
+        {{a osw x3eccccd2 osf 0}	x440dba95 x44af44ef}
+        {}
+        {}
+        {{a osw 0 osf 0}	x440dbec8 x44b8ee89}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43704000 x44a1f000}
+     {a osbe 0 osee 0 osw x40a00000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_4_width_4 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x44225b02 x449efcd6}
+        {}
+        {}
+        {{a osw x3f400005 osf 0}	x4422591c x44a650f0}
+        {}
+        {}
+        {{a osw x3eccccd2 osf 0}	x44225a96 x44af00ef}
+        {}
+        {}
+        {{a osw 0 osf 0}	x44225ec8 x44b8aa89}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43704000 x44a1f000}
+     {a osbe 0 osee 0 osw x40800000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_4_width_3 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x44377302 x449e70d6}
+        {}
+        {}
+        {{a osw x3f400005 osf 0}	x4437711c x44a5c4f0}
+        {}
+        {}
+        {{a osw x3eccccd2 osf 0}	x44377296 x44ae74ef}
+        {}
+        {}
+        {{a osw 0 osf 0}	x443776c8 x44b81e89}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43704000 x44a1f000}
+     {a osbe 0 osee 0 osw x40400000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_4_width_2 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x4448a302 x449e8cd5}
+        {}
+        {}
+        {{a osw x3f400005 osf 0}	x4448a11c x44a5e0ef}
+        {}
+        {}
+        {{a osw x3eccccd2 osf 0}	x4448a295 x44ae90ee}
+        {}
+        {}
+        {{a osw 0 osf 0}	x4448a6c8 x44b83a88}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43704000 x44a1f000}
+     {a osbe 0 osee 0 osw x40000000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_4_width_1 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x445da213 x449e5a2f}
+        {}
+        {}
+        {{a osw x3f400005 osf 0}	x445da02d x44a5ae49}
+        {}
+        {}
+        {{a osw x3eccccd2 osf 0}	x445da1a6 x44ae5e48}
+        {}
+        {}
+        {{a osw 0 osf 0}	x445da5d8 x44b807e2}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43704000 x44a1f000}
+     {a osbe 0 osee 0 osw 1 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_4_width_6 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x43ed4424 x449f5a30}
+        {}
+        {}
+        {{a osw x3f400005 osf 0}	x43ed4058 x44a6ae4a}
+        {}
+        {}
+        {{a osw x3eccccd2 osf 0}	x43ed4349 x44af5e49}
+        {}
+        {}
+        {{a osw 0 osf 0}	x43ed4bae x44b907e3}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43704000 x44a1f000}
+     {a osbe 0 osee 0 osw x40c00000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_4_width_7 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x43c34603 x449f8cd6}
+        {}
+        {}
+        {{a osw x3f400005 osf 0}	x43c34237 x44a6e0f0}
+        {}
+        {}
+        {{a osw x3eccccd2 osf 0}	x43c34528 x44af90ef}
+        {}
+        {}
+        {{a osw 0 osf 0}	x43c34d8d x44b93a89}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43704000 x44a1f000}
+     {a osbe 0 osee 0 osw x40e00000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_4_width_8 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x43a0e603 x449f70d7}
+        {}
+        {}
+        {{a osw x3f400005 osf 0}	x43a0e237 x44a6c4f1}
+        {}
+        {}
+        {{a osw x3eccccd2 osf 0}	x43a0e529 x44af74f0}
+        {}
+        {}
+        {{a osw 0 osf 0}	x43a0ed8d x44b91e8a}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43704000 x44a1f000}
+     {a osbe 0 osee 0 osw x41000000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_4_width_9 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x436d6c06 x449ffcd7}
+        {}
+        {}
+        {{a osw x3f400005 osf 0}	x436d646e x44a750f1}
+        {}
+        {}
+        {{a osw x3eccccd2 osf 0}	x436d6a52 x44b000f0}
+        {}
+        {}
+        {{a osw 0 osf 0}	x436d7b1a x44b9aa8a}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43704000 x44a1f000}
+     {a osbe 0 osee 0 osw x41100000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}
+    {curvegroup div_4_width_10 1049088 bezier
+     {{cc
+       {f 1056800}
+       {p
+        {}
+        {{a osw 1 osf 0}	x431aec06 x44a040d7}
+        {}
+        {}
+        {{a osw x3f400005 osf 0}	x431ae46e x44a794f1}
+        {}
+        {}
+        {{a osw x3eccccd2 osf 0}	x431aea50 x44b044f0}
+        {}
+        {}
+        {{a osw 0 osf 0}	x431afb1a x44b9ee8a}
+        {}}}
+      {cc
+       {f 1056800}
+       {p
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}
+        {}}}}
+     {t x43704000 x44a1f000}
+     {a osbe 0 osee 0 osw x41200000 osf 0 str 1 ltn x42480000 ltm x42480000 tt x41200000}}}}}}
+  toolbox {selectAll {
+  { selectAll str 1 ssx 1 ssy 1 sf 1 }
+  { selectCurves str 1 ssx 1 ssy 1 sf 1 }
+  { createBezier str 1 ssx 1 ssy 1 sf 1 sb 1 tt 4 }
+  { createBezierCusped str 1 ssx 1 ssy 1 sf 1 sb 1 tt 5 }
+  { createBSpline str 1 ssx 1 ssy 1 sf 1 sb 1 tt 6 }
+  { createEllipse str 1 ssx 1 ssy 1 sf 1 sb 1 tt 7 }
+  { createRectangle str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { createRectangleCusped str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { createOpenSpline str 1 ssx 1 ssy 1 sf 1 tt 10 }
+  { addPoints str 1 ssx 1 ssy 1 sf 1 }
+  { brush str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { eraser src 2 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { clone src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { reveal src 3 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { dodge src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { burn src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { blur src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { sharpen src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { smear src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+} }
+  toolbar_label_points true
+  toolbar_brush_hardness 0.200000003
+  toolbar_source_transform_scale {1 1}
+  toolbar_source_transform_center {320 240}
+  colorOverlay {0 0 0 0}
+  lifetime_type "all frames"
+  lifetime_start 67
+  lifetime_end 67
+  motionblur_shutter_offset_type centred
+  openspline_start_end_type square
+  openspline_last_end_type square
+  name spline_samples
+  xpos 207
+  ypos 103
+  addUserKnob {20 button +HIDDEN +INVISIBLE}
+  addUserKnob {22 createPowerRelative -STARTLINE T "import aePowerPinFun\naePowerPinFun.createPowerRelative()"}
+  addUserKnob {22 createPowerAbsolute -STARTLINE T "import aePowerPinFun\naePowerPinFun.createPowerAbsolute()"}
+  addUserKnob {22 createPowerStabilize -STARTLINE T "import aePowerPinFun\naePowerPinFun.createPowerStabilize()"}
+ }
+end_group
